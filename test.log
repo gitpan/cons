@@ -1,4 +1,4 @@
-Tests Started at [Fri Dec 25 20:20:40 EST 1998] on SunOS agastya 5.7 Generic sun4u sparc SUNW,Ultra-1
+Tests Started at [Thu Oct 28 18:21:14 EDT 1999] on Linux pss-pc.eng.fore.com 2.2.12 #1 SMP Wed Sep 29 09:00:48 EDT 1999 i686 unknown
 ------------
 cons-test.pl:  sh t0001a.sh
 PASSED
@@ -169,5 +169,5 @@ PASSED
 
 cons-test.pl:  'cons' passed all 83 tests.
 ------------
-Tests completed [Fri Dec 25 20:25:28 EST 1998]
+Tests completed [Thu Oct 28 18:22:33 EDT 1999]
 ------------

@@ -1,33 +1,105 @@
 Cons is a software construction system. A description appears under
 "Cons 1.0", below.
 
-$Id: //depot/proj/cons/src/CHANGES#4 $
+$Id: //depot/proj/cons/src/CHANGES#12 $
+
+Cons 1.7
+********
+Contributions from Rajesh Vaidheeswarran <rv@fore.com>
+
+- Add QuickScan documentation.
+
+- Add Argument passing from cons to Construct.
+
+- Remove modification history feature from cons due to duplication, and
+  bloat.
+
+Contributions from Brad Garcia <bgarcia@fore.com>
+
+- Add ability to compile both C and C++ files using the same environment.
+  Based off of code written by Michael Polis <mfp@terrasim.com>.
+
+Cons 1.6b1
+**********
+Contributions from Rajesh Vaidheeswarran <rv@fore.com>
+
+- Fix futil::copy to return undef if unable to copy a target to the cache
+  instead of aborting the build process.
+
+Cons 1.6a3
+**********
+Contributions from <v-ronaar@Exchange.Microsoft.com>
+
+- Fix for Win32: [problem: 'require'ing Win32 won't work when Win32 module
+  isn't installed, as is the case for a generic perl installation (not
+  ActiveState)].
+
+Contributions from Rajesh Vaidheeswarran <rv@fore.com>
+
+- InstallAs modified to accept either a single file or a list of files as
+  source and target.
+
+Cons 1.6a2
+**********
+Contributions from Rajesh Vaidheeswarran <rv@fore.com>
+
+- Bugfix for Repository to add the path to INC to enable perl packages in
+  the local tree to be used in Cons scripts.
+
+- Bugfix for SourcePath to return the correct path in a repositorey enabled
+  build.
+
+- Add InstallAs method to link/copy a source file to any arbitrary target
+  file name.
+
+- Move all the documentation to cons itself, and get rid of the pod file
+  from the distribution. Users can now use perlpod on cons to see the docs.
+
+Cons 1.6a1
+**********
+Contributions from Steven Knight <knight@baldmt.com>
+
+- Fixed a bug where .consign seems to be closed improperly when
+  cons is terminated with a signal, leading to rebuilds of various
+  targets that had already been built.
+
+Contributions from Rajesh Vaidheeswarran <rv@fore.com>
+
+- New flag -q (for quiet) to be less verbose about what files were
+  `Install'ed (or `Removed' when used in conjunction with -r).
 
 Cons 1.5
 ********
+Contributions from Steven Knight <knight@baldmt.com>
+
 - Added Repository global function, similar to make's VPATH, and
   supporting functions:  Local, Install_Local, Repository_List,
   Repository_Sig_Times_OK.
 
 - Added -R command-line option as a synonym for Repository.
 
-- Bugfix for SplitPath (when given a path with N components, 
+- Bugfix for SplitPath (when given a path with N components,
   it returned N**2 components).
 
 Cons 1.4a3
 **********
-- Construction local help can now be provided by defining at the top of 
-  toplevel script, the following:
-  Help qq( all the help material);
-  
+Contributions from Rajesh Vaidheeswarran <rv@fore.com>
+
+- Construction local help.
+  Exported command: Help <string>;
+
 Cons 1.4a2
 **********
+Contributions from Bob Sidebotham:
+
 - LIBPATH, CPPPATH, and program search path ENV->{PATH} may all now
   be arrays. The old usage (colon separated strings) is deprecated, but
   still supported. In the old form, on Unix, ":"'s separate path components,
   and on Windows, ";" separates them.
 
 - PATH_SEPERATOR was finally changed to PATH_SEPARATOR
+
+Contributions from Steven Knight <knight@baldmt.com>
 
 - Default target support has been added (see RELEASE for details).
 
@@ -36,8 +108,8 @@ Cons 1.4 (alpha1)
 
 This release of Cons has a number of changes. Briefly, they are:
 
- - a QuickScan function that makes it trivial to set up 
-   simple dependency scanners
+ - a QuickScan function that makes it trivial to set up
+   simple dependency scanners by Bob Sidebotham.
 
  - improvements in signature calculation for better control of rebuilds
 
@@ -50,21 +122,24 @@ This release of Cons has a number of changes. Briefly, they are:
 Cons 1.3.1
 **********
 
-This is a minor release with limited shared library support. Documentation
-is now maintained in pod format, thanks to the cons.pod file from
-Ulrich Pfiefer.
+This is a minor release with limited shared library support contributed by
+Gary Oberbrunner <garyo@genarts.com>.
+
+Documentation is now maintained in pod format, thanks to the cons.pod file
+from Ulrich Pfiefer.
 
 Cons 1.3
 ********
 
-This is the first combined Win32 and unix cons. This contains some
-significant fixes that enables the same cons file to be used for both
-platforms.
+This is the first combined Win32 and unix cons contributed by Rajesh
+Vaidheeswarran <rv@fore.com>. This contains some significant fixes that
+enables the same cons file to be used for both platforms.
 
 Cons 1.2
 ********
 
-This is the WIN32 port of cons.
+This is the WIN32 port of cons by Chriss Stephens <chriss@fore.com>, Rajesh
+Vaidheeswarran <rv@fore.com> and Jochen Schwarze <schwarze@isa.de>.
 
 Cons 1.1
 ********
@@ -92,7 +167,7 @@ production use on versions of SunOS, Solaris, HPUX, AIX, and IRIX.
 The current program will not work correctly on Windows/NT, but we do
 have an internal version that does appear to work on that platform,
 but has not been well tested. If anyone is interested, contact me.
-	
+
 PostScript documentation is in cons.ps.
 
 The following is an excerpt from the introduction in cons.ps:
@@ -125,8 +200,7 @@ The following is an excerpt from the introduction in cons.ps:
 Complaints, suggestions, kudos, etc. to:
 
 	Bob Sidebotham
-	rns@fore.com
-	1-412-635-3366
+	cons-discuss@eng.fore.com
 
 	FORE Systems
 	Pittsburgh, PA.
