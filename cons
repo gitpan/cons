@@ -3,7 +3,7 @@
 # Cons: A Software Construction Tool.
 # Bob Sidebotham (rns@fore.com), FORE Systems, 1996.
 
-$version = "This is Cons, version 1.0\n";
+$version = "This is Cons 1.1\n"; 
 
 # Copyright (c) 1996 FORE Systems, Inc.	 All rights reserved.
 
@@ -29,10 +29,6 @@ use integer;
 
 # Flush stdout each time.
 $| = 1;
-
-# Some system constants.
-$stat::mtime = 9;   # offset in stat array of file modification time.
-$stat::length = 7;  # offset in stat array of file length.
 
 $usage = q(
 Usage: cons <arguments>
@@ -62,15 +58,13 @@ Arguments can be any of the following, in any order:
   -r		Remove construction products associated with <targets>
 
   -v		Show cons version and continue processing.
+  -V            Show cons version and exit.
   -x		Show this message and exit.
 
 );
 
 # Simplify program name, if it is a path.
 $0 =~ s#.*/##;
-
-# We reuse this, so close it now.
-close(STDIN);
 
 # Default parameters.
 $param::topfile = 'Construct'; # Top-level construction file.
@@ -106,9 +100,7 @@ sub showcom {
      'ENV'	    => { 'PATH' => '/bin:/usr/bin' },
 );
 
-# For backwards compatibility, we hack it so that the +args at the beginning
-# before the first <target> argument are provided to the Construct file.
-# In the future this will not be supported.
+# Handle command line arguments.
 while (@ARGV) {
     $_ = shift(@ARGV);
     &option, next			if s/^-//;
@@ -120,6 +112,8 @@ while (@ARGV) {
 sub option {
     if ($_ eq 'v') {
 	print($version);
+    } elsif ($_ eq 'V') {
+	print($version), exit(0);
     } elsif ($_ eq 'o') {
 	$param::overfile = shift(@ARGV);
 	die("$0: -o option requires a filename argument.\n") if !$param::overfile;
@@ -158,13 +152,22 @@ sub equate {
 # Define file signature protocol.
 sig->select($param::sigpro);
 
-# Cleanup after a signal.
-$SIG{'INT'} = sub { 
-    $SIG{'INT'} = 'IGNORE';
+# Cleanup after an interrupt.
+$SIG{INT} = sub { 
+    $SIG{PIPE} = $SIG{INT} = 'IGNORE';
     warn("\n$0: interrupted\n");
     # Call this first, to make sure that this processing
     # occurs even if a child process does not die (and we
     # hang on the wait).
+    sig::hash::END();
+    wait();
+    exit(1);
+};
+
+# Cleanup after a broken pipe (someone piped our stdout?)
+$SIG{PIPE} = sub { 
+    $SIG{PIPE} = $SIG{INT} = 'IGNORE';
+    warn("\n$0: broken pipe\n");
     sig::hash::END();
     wait();
     exit(1);
@@ -180,7 +183,7 @@ if ($param::topfile =~ s#(.*)/##) {
 package override;
 if ($param::overfile) {
     my($ov) = $param::overfile;
-    die qq($0: can't read override file "$ov" ($!)\n) if ! -f $ov;
+    die qq($0: can't read override file "$ov" ($!)\n) if ! -f $ov; #'
     do $ov;
     if ($@) {
 	chop($@);
@@ -220,7 +223,6 @@ for $tgt (map($dir::top->lookup($_), @targets)) {
     my($status) = buildtarget($tgt);
     if ($status ne 'built') {
 	my($path) = $tgt->path;
-	$path =~ s#/$##;
 	if ($status eq "errors") {
 	    print qq($0: "$path" not remade because of errors.\n);
 	    $errors++;
@@ -232,7 +234,7 @@ for $tgt (map($dir::top->lookup($_), @targets)) {
 	} elsif ($status eq "none") {
 	    #???
 	} else {
-	    print qq($0: don't know how to construct "$path".\n");
+	    print qq($0: don't know how to construct "$path".\n"); #'
 	    $errors++;
 	}
     }
@@ -246,12 +248,12 @@ sub buildtarget {
     if (ref($tgt) eq "dir") {
 	my($result) = "none";
 	my($priority) = $priority{$result};
-	if (exists $tgt->{'member'}) {
-	    my($members) = $tgt->{'member'};
-	    for $entry (keys %$members) {
+	if (exists $tgt->{member}) {
+	    my($members) = $tgt->{member};
+	    for $entry (sort keys %$members) {
 		next if $entry =~ /^\./; # ignore hidden files
 		my($tgt) = $members->{$entry};
-		next if ref($tgt) eq "file" && !exists($tgt->{'builder'});
+		next if ref($tgt) eq "file" && !exists($tgt->{builder});
 		my($stat) = buildtarget($members->{$entry});
 		my($pri) = $priority{$stat};
 		if ($pri > $priority) {
@@ -266,8 +268,8 @@ sub buildtarget {
 	return build $tgt;
     } elsif ($param::depends) {
 	my($path) = $tgt->path;
-	if ($tgt->{'builder'}) {
-	    my(@dep) = (@{$tgt->{'dep'}}, @{$tgt->{'sources'}});
+	if ($tgt->{builder}) {
+	    my(@dep) = (@{$tgt->{dep}}, @{$tgt->{sources}});
 	    for $dep (@dep) {
 		print("dep: $dep\n");}
 	    my($dep) = join(' ',map($_->path, @dep));
@@ -276,18 +278,18 @@ sub buildtarget {
 	    print("$path: not a derived file\n");
 	}
     } elsif ($param::pflag || $param::wflag || $param::aflag) {
-	if ($tgt->{'builder'}) {
+	if ($tgt->{builder}) {
 	    if ($param::wflag) {
-		print qq(${\$tgt->path}: $tgt->{'script'}\n);
+		print qq(${\$tgt->path}: $tgt->{script}\n);
 	    } elsif ($param::pflag) {
 		print qq(${\$tgt->path}:\n) if $param::aflag;
 		print qq(${\$tgt->path}\n) if !$param::aflag;
 	    }
 	    if ($param::aflag) {
-		$tgt->{'builder'}->action($tgt);
+		$tgt->{builder}->action($tgt);
 	    }
 	}
-    } elsif ($param::rflag && $tgt->{'builder'}) {
+    } elsif ($param::rflag && $tgt->{builder}) {
 	my($path) = $tgt->path;
 	if (-f $path) {
 	    if (unlink($path)) {
@@ -316,8 +318,8 @@ sub main::doscripts {
 
     my(@scripts) = pop(@priv::scripts);
     while ($priv::self = shift(@scripts)) {
-	my($path) = $priv::self->{'script'}->srcpath;
-	$dir::cwd = $priv::self->{'script'}->{'dir'};
+	my($path) = $priv::self->{script}->srcpath;
+	$dir::cwd = $priv::self->{script}->{dir};
 	if (-f $path) {
 	    do $path;
 	    if ($@) {
@@ -352,28 +354,28 @@ sub main::doscripts {
 sub Link {
     my(@paths) = @_;
     my($srcdir) = $dir::cwd->lookupdir(pop @paths)->srcdir;
-    map($dir::cwd->lookupdir($_)->{'srcdir'} = $srcdir, @paths);
+    map($dir::cwd->lookupdir($_)->{srcdir} = $srcdir, @paths);
 }
 
 # Export variables to any scripts invoked from this one.
 sub Export {
-    @{$priv::self->{'exports'}} = @_;
+    @{$priv::self->{exports}} = @_;
 }
 
 # Import variables from the export list of the caller
 # of the current script.
 sub Import {
-    my($parent) = $priv::self->{'parent'};
-    my($imports) = $priv::self->{'imports'};
-    @{$priv::self->{'exports'}} = keys %$imports;
+    my($parent) = $priv::self->{parent};
+    my($imports) = $priv::self->{imports};
+    @{$priv::self->{exports}} = keys %$imports;
     my($var);
     while ($var = shift) {
 	if (!exists $imports->{$var}) {
-	    my($path) = $parent->{'script'}->path;
+	    my($path) = $parent->{script}->path;
 	    die qq($0: variable "$var" not exported by file "$path"\n);
 	}
 	if (!defined $imports->{$var}) {
-	    my($path) = $parent->{'script'}->path;
+	    my($path) = $parent->{script}->path;
 	    die qq($0: variable "$var" exported but not defined by file "$path"\n);
 	}
 	${"script::$var"} = $imports->{$var};
@@ -386,7 +388,7 @@ sub Import {
 sub Build {
     my(@files) = map($dir::cwd->lookup($_), @_);
     my(%imports);
-    map($imports{$_} = ${"script::$_"}, @{$priv::self->{'exports'}});
+    map($imports{$_} = ${"script::$_"}, @{$priv::self->{exports}});
     for $file (@files) {
 	next if $param::include && $file->path !~ /$param::include/o;
 	my($self) = {'script' => $file,
@@ -403,6 +405,20 @@ sub Ignore {
     $param::ignore = join("|", map("($_)", @_)) if @_;
 }
 
+# Return the build name(s) of a file or file list.
+sub FilePath {
+    wantarray
+	? map($dir::cwd->lookup($_)->path, @_)
+	: $dir::cwd->lookup($_[0])->path;
+}
+
+# Return the build name(s) of a directory or directory list.
+sub DirPath {
+    wantarray
+	? map($dir::cwd->lookupdir($_)->path, @_)
+	: $dir::cwd->lookupdir($_[0])->path;
+}
+
 
 # These methods are callable from Conscript files, via a cons
 # object. Procs beginning with _ are intended for internal use.
@@ -414,8 +430,8 @@ package cons;
 sub new {
     my($package) = shift;
     my ($env) = {@param::defaults, @_};
-    @{$env->{'_envcopy'}} = %$env; # Note: we never change PATH
-    $env->{'_cwd'} = $dir::cwd; # Save directory of environment for
+    @{$env->{_envcopy}} = %$env; # Note: we never change PATH
+    $env->{_cwd} = $dir::cwd; # Save directory of environment for
     bless $env, $package;	# any deferred name interpretation.
 }
 
@@ -424,9 +440,9 @@ sub new {
 # of the original environment.
 sub clone {
     my($env) = shift;
-    my $clone = {@{$env->{'_envcopy'}}, @_};
-    @{$clone->{'_envcopy'}} = %$clone; # Note: we never change PATH
-    $clone->{'_cwd'} = $env->{'_cwd'};
+    my $clone = {@{$env->{_envcopy}}, @_};
+    @{$clone->{_envcopy}} = %$clone; # Note: we never change PATH
+    $clone->{_cwd} = $env->{_cwd};
     bless $clone, ref $env;
 }
 
@@ -435,7 +451,7 @@ sub clone {
 # may be modified if it is converted back to a hash.
 sub copy {
     my($env) = shift;
-    (@{$env->{'_envcopy'}}, 'ENV' => {%{$env->{'ENV'}}}, @_)
+    (@{$env->{_envcopy}}, 'ENV' => {%{$env->{ENV}}}, @_)
 }
 
 # Resolve which environment to actually use for a given
@@ -450,9 +466,9 @@ sub _resolve {
 	# and the override.
 	my($ovr) = $param::overrides{$re};
 	return $envcache{$env,$re} if $envcache{$env,$re};
-	my($newenv) = {@{$env->{'_envcopy'}}, @$ovr};
-	@{$newenv->{'_envcopy'}} = %$env;
-	$newenv->{'_cwd'} = $env->{'_cwd'};
+	my($newenv) = {@{$env->{_envcopy}}, @$ovr};
+	@{$newenv->{_envcopy}} = %$env;
+	$newenv->{_cwd} = $env->{_cwd};
 	return $envcache{$env,$re} = bless $newenv, ref $env;
     }
     return $env;
@@ -470,22 +486,22 @@ sub Install {
     my($env) = shift;
     my($tgtdir) = $dir::cwd->lookupdir(shift);
     for $file (map($dir::cwd->lookup($_), @_)) {
-	my($tgt) = $tgtdir->lookup($file->{'entry'});
+	my($tgt) = $tgtdir->lookup($file->{entry});
 	$tgt->bind(find build::install, $file);
     }
 }
 
 sub Objects {
     my($env) = shift;
-    map($_->{'entry'}, _Objects($env, map($dir::cwd->lookup($_), @_)))
+    map($_->{entry}, _Objects($env, map($dir::cwd->lookup($_), @_)))
 }
 
 # Called with multiple source file references (or object files).
 # Returns corresponding object files references.
 sub _Objects {
     my($env) = shift;
-    my($suffix) = $env->{'SUFOBJ'};
-    map(_Object($env, $_, $_->{'dir'}->lookup($_->base . $suffix)), @_)
+    my($suffix) = $env->{SUFOBJ};
+    map(_Object($env, $_, $_->{dir}->lookup($_->base . $suffix)), @_)
 }
 
 # Called with an object and source reference.  If no object reference
@@ -509,7 +525,7 @@ sub Program {
     my($env) = shift;
     my($tgt) = $dir::cwd->lookup(shift);
     my($progenv) = $env->_resolve($tgt);
-    $tgt->bind(find build::command::link($progenv, $progenv->{'LINKCOM'}),
+    $tgt->bind(find build::command::link($progenv, $progenv->{LINKCOM}),
 	       $env->_Objects(map($dir::cwd->lookup($_), @_)));
 }
 
@@ -524,7 +540,7 @@ sub Module {
 
 sub Library {
     my($env) = shift;
-    my($lib) = $dir::cwd->lookup(file::addsuffix(shift, $env->{'SUFLIB'}));
+    my($lib) = $dir::cwd->lookup(file::addsuffix(shift, $env->{SUFLIB}));
     my($libenv) = $env->_resolve($lib);
     $lib->bind(find build::command::library($libenv),
 	       $env->_Objects(map($dir::cwd->lookup($_), @_)));
@@ -560,7 +576,7 @@ sub Command {
 sub Depends {
     my($env) = shift;
     my($tgt) = $dir::cwd->lookup(shift);
-    push(@{$tgt->{'dep'}}, map($dir::cwd->lookup($_), @_));
+    push(@{$tgt->{dep}}, map($dir::cwd->lookup($_), @_));
 }
 
 # Generic builder module. Just a few default methods.  Every derivable
@@ -592,7 +608,7 @@ sub find {
 # Do the installation.
 sub action {
     my($self, $tgt) = @_;
-    my($src) = $tgt->{'sources'}[0];
+    my($src) = $tgt->{sources}[0];
     main::showcom("Install ${\$src->path} as ${\$tgt->path}") if $param::install;
     return unless $param::build;
     futil::install($src->srcpath, $tgt);
@@ -623,21 +639,21 @@ sub find {
 # Build the target using the previously specified commands.
 sub action {
     my($self, $tgt) = @_;
-    my($env) = $self->{'env'};
+    my($env) = $self->{env};
     my($path) = $tgt->path;
 
     if ($param::build) {
-	futil::mkdir($tgt->{'dir'});
+	futil::mkdir($tgt->{dir});
 	unlink($path); # is this done already?
     }
 
     # Set environment.
     map(delete $ENV{$_}, keys %ENV);
-    %ENV = %{$env->{'ENV'}};
+    %ENV = %{$env->{ENV}};
 
     # Handle multi-line commands.
-    for $com (split(/\n/, $self->{'com'})) {
-	my(@src) = (undef, @{$tgt->{'sources'}});
+    for $com (split(/\n/, $self->{com})) {
+	my(@src) = (undef, @{$tgt->{sources}});
 	my(@src1) = @src;
 
 	next if $com =~ /^\s*$/;
@@ -651,8 +667,8 @@ sub action {
 	    my($src) = $src1[$1];
 	    my($subst) =
 		!$src? '' :
-		    $3 eq 'f' ? $src1[$1]->{'entry'} :
-			$3 eq 'd'? $src1[$1]->{'dir'}->dpath :
+		    $3 eq 'f' ? $src1[$1]->{entry} :
+			$3 eq 'd'? $src1[$1]->{dir}->path :
 			    $src1[$1]->path;
 	    undef $src[$1];	    
 	    $com =~ s/$match/$subst/;
@@ -662,8 +678,8 @@ sub action {
 	while ($com =~ /%[0>](:([fd]?))?/) {
 	    my($match) = $&;
 	    my($subst) =
-		$2 eq 'f' ? $tgt->{'entry'} :
-		    $2 eq 'd'? $tgt->{'dir'}->dpath :
+		$2 eq 'f' ? $tgt->{entry} :
+		    $2 eq 'd'? $tgt->{dir}->path :
 			$path;
 	    $com =~ s/$match/$subst/;
 	}
@@ -673,14 +689,15 @@ sub action {
 	    my($match) = $&;
 	    my($subst) =
 		join(' ',
-		     $2 eq 'f' ? map($_ && $_->{'entry'} || (), @src) :
-		     $2 eq 'd' ? map($_ && $_->{'dir'}->dpath || (), @src) :
+		     $2 eq 'f' ? map($_ && $_->{entry} || (), @src) :
+		     $2 eq 'd' ? map($_ && $_->{dir}->path || (), @src) :
 		     map($_ && $_->path || (), @src));
 	    $com =~ s/$match/$subst/;
 	}
 	
 	# White space cleanup. XXX NO WAY FOR USER TO HAVE QUOTED SPACES
 	$com = join(' ', split(' ', $com));
+	next if $com =~ /^:/ && $com !~ /^:\S/;
 
 	main::showcom($com);
 	if ($param::build) {
@@ -691,7 +708,7 @@ sub action {
 		exec($com);
 		$com =~ s/\s.*//;
 		die qq($0: failed to execute "$com" ($!). )
-		    . qq(Is this an executable on path "$ENV{'PATH'}"?\n);
+		    . qq(Is this an executable on path "$ENV{PATH}"?\n);
 	    }
 	    do {} until wait() == $pid;
 	    my($err) = $? >> 8;
@@ -709,7 +726,7 @@ sub action {
 # Return generic build script (without $<, $>, etc. bound), for
 # dependency calculation. $<, etc. are depended on explicitly.
 sub script {
-    $_[0]->{'com'}
+    $_[0]->{com}
 }
 
 # Link a program.
@@ -720,14 +737,13 @@ BEGIN { @ISA = qw(build::command) }
 # Find an appropriate linker.
 sub find {
     my($class, $env, $command) = @_;
-    if (!exists $env->{'_LDIRS'}) {
+    if (!exists $env->{_LDIRS}) {
 	my($ldirs);
-	my($wd) = $env->{'_cwd'};
-	for $dir (map($wd->lookupdir($_), split(/:/, $env->{'LIBPATH'}))) {
+	my($wd) = $env->{_cwd};
+	for $dir (map($wd->lookupdir($_), split(/:/, $env->{LIBPATH}))) {
 	    $ldirs .= ' -L' . $dir->path;
-	    chop($ldirs); # Remove trailing slash.
 	}
-	$env->{'_LDIRS'} = $ldirs;
+	$env->{_LDIRS} = $ldirs;
     }
     bless find build::command($env, $command);
 }
@@ -736,17 +752,17 @@ sub find {
 # environment are built, and return the collected signatures
 # of the libraries in the path.
 sub includes {
-    return $_[0]->{'sig'} if exists $_[0]->{'sig'};
+    return $_[0]->{sig} if exists $_[0]->{sig};
     my($self, $tgt) = @_;
-    my($env) = $self->{'env'};
-    my($ewd) = $env->{'_cwd'};
-    my(@lpath) = map($ewd->lookupdir($_), split(/:/, $env->{'LIBPATH'}));
+    my($env) = $self->{env};
+    my($ewd) = $env->{_cwd};
+    my(@lpath) = map($ewd->lookupdir($_), split(/:/, $env->{LIBPATH}));
     my(@sigs);
-    for $name (split(' ', $env->{'LIBS'})) {
+    for $name (split(' ', $env->{LIBS})) {
 	my($lpath);
 	if ($name =~ /^-l(.*)/) {
 	    # -l style names are looked up on LIBPATH
-	    $name = "lib$1$env->{'SUFLIB'}";
+	    $name = "lib$1$env->{SUFLIB}";
 	    $lpath = \@lpath;
 	} else {
 	    $lpath = [$dir::top];
@@ -756,7 +772,7 @@ sub includes {
 	    if ($lib->accessible) {
 		last if $lib->ignore;
 		if ((build $lib) eq 'errors') {
-		    $tgt->{'status'} = 'errors';
+		    $tgt->{status} = 'errors';
 		    return undef;
 		}
 		push(@sigs, sig->signature($lib));
@@ -764,7 +780,7 @@ sub includes {
 	    }
 	}
     }
-    $self->{'sig'} = sig->collect(@sigs);
+    $self->{sig} = sig->collect(@sigs);
 }    
 
 # Builder for a C module
@@ -773,20 +789,20 @@ package build::command::cc;
 BEGIN { @ISA = qw(build::command) }
 
 sub find {
-    $_[1]->{'_cc'} || do {
+    $_[1]->{_cc} || do {
 	my($class, $env) = @_;
-	my($cscanner) = find scan::cpp($env->{'_cwd'}, $env->{'CPPPATH'});
-	$env->{'_IFLAGS'} = $cscanner->iflags;
-	my($self) = find build::command($env, $env->{'CCCOM'});
-	$self->{'scanner'} = $cscanner;
-	bless $env->{'_cc'} = $self;
+	my($cscanner) = find scan::cpp($env->{_cwd}, $env->{CPPPATH});
+	$env->{_IFLAGS} = $cscanner->iflags;
+	my($self) = find build::command($env, $env->{CCCOM});
+	$self->{scanner} = $cscanner;
+	bless $env->{_cc} = $self;
     }
 }
 
 # Invoke the associated	 C scanner to get signature of included files.
 sub includes {
     my($self, $tgt) = @_;
-    $self->{'scanner'}->includes($tgt, $tgt->{'sources'}[0]);
+    $self->{scanner}->includes($tgt, $tgt->{sources}[0]);
 }
 
 # Builder for a user command (cons::Command).  We assume that a user
@@ -799,30 +815,30 @@ BEGIN { @ISA = qw(build::command) }
 
 # XXX Optimize this to not use ignored paths.
 sub includes {
-    return $_[0]->{'comsig'} if exists $_[0]->{'comsig'};
+    return $_[0]->{comsig} if exists $_[0]->{comsig};
     my($self, $tgt) = @_;
-    my($env) = $self->{'env'};
+    my($env) = $self->{env};
   com:
     for $com (split(/\n/, $self->script)) {
 	# Isolate command word.
 	$com =~ s/^\s*//;
 	$com =~ s/\s.*//;
 	next if !$com; # blank line
-	for $dir (map($dir::top->lookupdir($_), split(/:/, $env->{'ENV'}->{'PATH'}))) {
+	for $dir (map($dir::top->lookupdir($_), split(/:/, $env->{ENV}->{PATH}))) {
 	    my($prog) = $dir->lookup($com);
-	    next com if $prog->ignore;
 	    if ($prog->accessible) { # XXX Not checking execute permission.
 		if ((build $prog) eq 'errors') {
-		    $tgt->{'status'} = 'errors';
+		    $tgt->{status} = 'errors';
 		    return undef;
 		}
-		$self->{'comsig'} .= sig->signature($prog);
+		next com if $prog->ignore;
+		$self->{comsig} .= sig->signature($prog);
 		next com;
 	    }
 	}
 	# Not found: let shell give an error.
     }
-    return $self->{'comsig'};
+    return $self->{comsig};
 }
 
 
@@ -835,7 +851,7 @@ BEGIN { @ISA = qw(build::command) }
 
 sub find {
     my($class, $env) = @_;
-    bless find build::command($env, $env->{'ARCOM'})
+    bless find build::command($env, $env->{ARCOM})
 }
 
 # Always compatible with other library builders, so the user
@@ -856,35 +872,35 @@ sub new {
 }
 
 sub script {
-    my($self) = pop(@_);
-    $self->{'builder'}->script(@_);
+    my($self, $tgt) = @_;
+    $self->{builder}->script($tgt);
 }
 
 sub includes {
-    my($self) = pop(@_);
-    $self->{'builder'}->includes(@_);
+    my($self, $tgt) = @_;
+    $self->{builder}->includes($tgt);
 }
 
 sub compatible {
-    my($self) = pop(@_);
-    $self->{'builder'}->compatible(@_);
+    my($self, $tgt) = @_;
+    $self->{builder}->compatible($tgt);
 }
 
 sub action {
     my($self, $invoked_tgt) = @_;
-    return $self->{'built'} if exists $self->{'built'};
+    return $self->{built} if exists $self->{built};
 
     # Make sure all targets in the group are unlinked before building any.
-    my($tgts) = $self->{'tgts'};
+    my($tgts) = $self->{tgts};
     for $tgt (@$tgts) {
-	futil::mkdir($tgt->{'dir'});
+	futil::mkdir($tgt->{dir});
 	unlink($tgt->path);
     }
 
     # Now do the action to build all the targets. For consistency
     # we always call the action on the first target, just so that
     # $> is deterministic.
-    $self->{'built'} = $self->{'builder'}->action($tgts->[0]);
+    $self->{built} = $self->{builder}->action($tgts->[0]);
 
     # Now "build" all the other targets (except for the one
     # we were called with). This guarantees that the signature
@@ -895,14 +911,14 @@ sub action {
     # correctly.
     for $tgt (@$tgts) {
 	if ($tgt ne $invoked_tgt) {
-	    delete $tgt->{'status'};
+	    delete $tgt->{status};
 	    sig->invalidate($tgt);
 	    build $tgt;
 	}
     }
 
     # Status of action.
-    $self->{'built'};
+    $self->{built};
 }
 
 
@@ -917,7 +933,7 @@ package scan;
 sub includes {
     my($self, $tgt, @files) = @_;
     my(%files, $file);
-    my($inc) = $self->{'includes'} || ($self->{'includes'} = {});
+    my($inc) = $self->{includes} || ($self->{includes} = {});
     while ($file = pop @files) {
 	next if exists $files{$file};
 	if ($inc->{$file}) {
@@ -925,7 +941,7 @@ sub includes {
 	    $files{$file} = sig->signature($file);
 	} else {
 	    if ((build $file) eq 'errors') {
-		$tgt->{'status'} = 'errors'; # tgt inherits build status
+		$tgt->{status} = 'errors'; # tgt inherits build status
 		return ();
 	    }
 	    $files{$file} = sig->signature($file);
@@ -966,9 +982,9 @@ sub scan {
     my($self, $file) = @_;
     my($angles, $quotes);
 
-    if (exists $file->{'angles'}) {
-	$angles = $file->{'angles'};
-	$quotes = $file->{'quotes'};
+    if (exists $file->{angles}) {
+	$angles = $file->{angles};
+	$quotes = $file->{quotes};
     } else {
 	my(@anglenames, @quotenames);
 	return () unless open(SCAN, $file->path);
@@ -987,12 +1003,12 @@ sub scan {
 	    }
 	}
 	close(SCAN);
-	$angles = $file->{'angles'} = \@anglenames;
-	$quotes = $file->{'quotes'} = \@quotenames;
+	$angles = $file->{angles} = \@anglenames;
+	$quotes = $file->{quotes} = \@quotenames;
     }
 
-    my(@shortpath) = @{$self->{'path'}};	  # path for <> style includes
-    my(@longpath) = ($file->{'dir'}, @shortpath); # path for "" style includes
+    my(@shortpath) = @{$self->{path}};	  # path for <> style includes
+    my(@longpath) = ($file->{dir}, @shortpath); # path for "" style includes
 
     my(@includes);
 
@@ -1023,9 +1039,8 @@ sub scan {
 sub iflags {
     my($self) = @_;
     my($path);
-    for $dpath (map($_->path, @{$self->{'path'}})) {
+    for $dpath (map($_->path, @{$self->{path}})) {
 	$path .= " -I$dpath";
-	chop($path);  # remove trailing slash.
     }
     $path
 }
@@ -1035,13 +1050,13 @@ sub iflags {
 package dir;
 
 BEGIN {
-    $root = { 'path' => '/', 'srcpath' => '/', 'exists' => 1 };
-    $root->{'srcdir'} = $root;
+    $root = {path => '/', prefix => '/', srcpath => '/', exists => 1 };
+    $root->{srcdir} = $root;
     bless $root;
 
-    $top = { 'path' => '', 'srcpath' => '', 'exists' => 1 };
-    $top->{'srcdir'} = $top;
-    $top->{'member'}->{'.'} = $top;
+    $top = {path => '.', prefix => '', srcpath => '.', exists => 1 };
+    $top->{srcdir} = $top;
+    $top->{member}->{'.'} = $top;
     bless $top;
 
     $cwd = $top;
@@ -1064,57 +1079,63 @@ sub lookup {
 	# stem and entry, and find the new directory
 	# to look the entry up in.
 	my($stem);
-	($stem, $entry) = $entry =~ m#(.*)/(.*)#;
-	if ($stem =~ s#^/##) {
+	if ($entry =~ s#^/##) {
 	    # Absolute path
-	    $dir = $dir::root->lookupdir($stem)
-	} elsif ($stem =~ s/^#//) {
-	    # Top-relative names begin with #.
-	    $dir = $dir::top->lookupdir($stem)
+	    if ($entry =~ m#/#) {
+		($stem, $entry) = $entry =~ m#(.*)/(.*)#;
+		$dir = $root->lookupdir($stem)
+	    } else {
+		return $root if !$entry;
+		$dir = $root;
+	    }
 	} else {
-	    $dir = $dir->lookupdir($stem)
+  	    ($stem, $entry) = $entry =~ m#(.*)/(.*)#;
+	    if ($entry =~ s/^#//) {
+		# Top-relative names begin with #.
+		$dir = $dir::top->lookupdir($stem)
+	    } else {
+		$dir = $dir->lookupdir($stem)
+	    }
 	}
     }
-    $dir->{'member'}->{$entry} ||
-	bless $dir->{'member'}->{$entry} =
+    $dir->{member}->{$entry} ||
+	bless $dir->{member}->{$entry} =
 	    {'entry' => $entry, 'dir' => $dir}, file
 }
 
 sub lookupdir {
     $dir::cache{$_[0],$_[1]} || do {
 	my($dir) = $dir::cache{$_[0],$_[1]} = &dir::lookup;
-	$dir->{'member'}->{'..'} = $dir->{'dir'};
-	$dir->{'member'}->{'.'} = $dir;
+	$dir->{member}->{'..'} = $dir->{dir};
+	$dir->{member}->{'.'} = $dir;
 	bless $dir;
     }	    
 }
 
-# Return the path of the directory, with a trailing slash.
-# XXX does this work for $dir::top?
+# Return the path of the directory (file paths implemented
+# separately, below).
 sub path {
-    return $_[0]->{'path'} if exists $_[0]->{'path'};
-    $_[0]->{'path'} = $_[0]->{'dir'}->path . $_[0]->{'entry'} . '/'
+    $_[0]->{path} ||
+	($_[0]->{path} = $_[0]->{dir}->prefix . $_[0]->{entry});
 }
 
-# Return the path of the directory without a trailing slash.
-sub dpath {
-    my($path) = $_[0]->path;
-    chop($path);
-    $path
+# Return the pathname as a prefix to be concatenated with an entry.
+sub prefix {
+    return $_[0]->{prefix} if exists $_[0]->{prefix};
+    $_[0]->{prefix} = $_[0]->path . '/'
 }
 
-# Return the related source path of the directory with a trailing slash.
-sub srcpath {
-    return $_[0]->{'srcpath'} if exists $_[0]->{'srcpath'};
+# Return the related source path prefix.
+sub srcprefix {
+    return $_[0]->{srcprefix} if exists $_[0]->{srcprefix};
     my($srcdir) = $_[0]->srcdir;
-    $srcdir->{'srcpath'} = $srcdir eq $_[0] ?
-	$srcdir->path : $srcdir->srcpath;
+    $srcdir->{srcprefix} = $srcdir eq $_[0] ? $srcdir->prefix : $srcdir->srcprefix;
 }
 
 # Return the related source directory.
 sub srcdir {
-    $_[0]->{'srcdir'} ||
-	($_[0]->{'srcdir'} = $_[0]->{'dir'}->srcdir->lookupdir($_[0]->{'entry'}))
+    $_[0]->{srcdir} ||
+	($_[0]->{srcdir} = $_[0]->{dir}->srcdir->lookupdir($_[0]->{entry}))
 }
 
 
@@ -1123,8 +1144,10 @@ package file;
 BEGIN { @ISA = qw(dir) }
 
 # Return the pathname of the file.
+# Define this separately from dir::path because we don't want to
+# cache all file pathnames (just directory pathnames).
 sub path {
-    $_[0]->{'dir'}->path . $_[0]->{'entry'}
+    $_[0]->{dir}->prefix . $_[0]->{entry}
 }
 
 # Return the related source file path.
@@ -1135,17 +1158,17 @@ sub path {
 # and object path, then compares the paths, all for no particular
 # reason.
 sub srcpath {
-    if ($_[0]->{'builder'}) {
-	$_[0]->{'dir'}->path . $_[0]->{'entry'}
+    if ($_[0]->{builder}) {
+	$_[0]->{dir}->prefix . $_[0]->{entry}
     } else {
-	$_[0]->{'dir'}->srcpath . $_[0]->{'entry'}
+	$_[0]->{dir}->srcprefix . $_[0]->{entry}
     }
 }
 
 # Return the entry name of the specified file
 # without the suffix 
 sub base {
-    my($entry) = $_[0]->{'entry'};
+    my($entry) = $_[0]->{entry};
     $entry =~ s/\.[^\.]*$//;
     $entry
 }
@@ -1153,7 +1176,7 @@ sub base {
 # Return the suffix of the file, for up to a 3 character
 # suffix. Anything less returns nothing.
 sub suffix {
-    $_[0]->{'entry'} =~ /\.[^\.\/]{0,3}$/;
+    $_[0]->{entry} =~ /\.[^\.\/]{0,3}$/;
     $&
 }
 
@@ -1170,7 +1193,7 @@ sub addsuffix {
 # Return true if the file is (or will be) accessible.
 # That is, if we can build it, or if it is already present.
 sub accessible {
-    (exists $_[0]->{'builder'}) || sig->signature($_[0])
+    (exists $_[0]->{builder}) || sig->signature($_[0])
 }
 
 # Return true if the file should be ignored for the purpose
@@ -1179,30 +1202,30 @@ sub accessible {
 # dependencies). 
 sub ignore {
     return 0 if !$param::ignore;
-    return $_[0]->{'ignore'} if exists $_[0]->{'ignore'};
-    $_[0]->{'ignore'} = $_[0]->path =~ /$param::ignore/o
+    return $_[0]->{ignore} if exists $_[0]->{ignore};
+    $_[0]->{ignore} = $_[0]->path =~ /$param::ignore/o
 }
 
 # Build the file, if necessary.
 sub build {
-    $_[0]->{'status'} || &file::_build
+    $_[0]->{status} || &file::_build
 }
 
 sub _build {
     my($self) = @_;
-    if (!exists $self->{'builder'}) {
+    if (!exists $self->{builder}) {
 	# We don't know how to build the file. This is OK, if
 	# the file is present in the tree.
 	if (sig->signature($self)) {
 	    # This may read the signature (if externally provided)
 	    # or fabricate it (either from the file's name and timestamp)
 	    # or from the file's contents.
-	    return $self->{'status'} = 'handled';
+	    return $self->{status} = 'handled';
 	} else {
 	    my($name) = $self->path;
 	    print("$0: don't know how to construct \"$name\"\n");
 	    exit(1) unless $param::kflag;
-	    return $self->{'status'} = 'errors'; # xxx used to be 'unknown'
+	    return $self->{status} = 'errors'; # xxx used to be 'unknown'
 	}
     }
 
@@ -1210,26 +1233,26 @@ sub _build {
     # the file. We first compute the signature of the file, based
     # on its dependendencies, then only rebuild the file if the
     # signature has changed.
-    my($builder) = $self->{'builder'};
+    my($builder) = $self->{builder};
 
     # Will contain signatures of dependents
     my (@dsig);
 
     # Get signatures of statically defined dependents.
-    for $dep (@{$self->{'dep'}}, @{$self->{'sources'}}) {
+    for $dep (@{$self->{dep}}, @{$self->{sources}}) {
 	if ((build $dep) eq 'errors') {
 	    # Propagate dependent errors to target.
-	    $self->{'status'} = 'errors';
+	    $self->{status} = 'errors';
 	} else {
 	    push(@dsig, sig->signature($dep));
 	}
     }
 
-    return 'errors' if $self->{'status'} eq 'errors';
+    return 'errors' if $self->{status} eq 'errors';
     
     # Add dynamic dependent signature, if appropriate.
     push(@dsig, $builder->includes($self));
-    return 'errors' if $self->{'status'} eq 'errors';
+    return 'errors' if $self->{status} eq 'errors';
 
     # Compute the final signature of the file.
     my($sig) = sig->collect(@dsig, $builder->script);
@@ -1239,26 +1262,26 @@ sub _build {
 	# We have to build/derive the file.
 	if (! $builder->action($self)) {
 	    die("$0: errors constructing ${\$self->path}\n") unless $param::kflag;
-	    return $self->{'status'} = 'errors';
+	    return $self->{status} = 'errors';
 	} else {
 	    # We only ever set status to "built" if it was really built
 	    # by us (not just because it exists).
 	    sig->set($self, $sig);
-	    return $self->{'status'} = 'built';
+	    return $self->{status} = 'built';
 	}
     } else {
-	return $self->{'status'} = 'handled';
+	return $self->{status} = 'handled';
     }
 }
 
 # Bind an action to a file, with the specified sources. No return value.
 sub bind {
     my($self, $builder, @sources) = @_;
-    if ($self->{'builder'} && !$self->{'builder'}->compatible($builder)) {
+    if ($self->{builder} && !$self->{builder}->compatible($builder)) {
 	# Even if not "compatible", we can still check to see if the
 	# derivation is identical. It should be identical if the builder is
 	# the same and the sources are the same.
-	if ("$self->{'builder'} @{$self->{'sources'}}" ne "$builder @sources") {
+	if ("$self->{builder} @{$self->{sources}}" ne "$builder @sources") {
 	    $main::errors++;
 	    my($path) = $self->path;
 	    die("$0: attempt to build ${\$self->path} twice, in different ways!\n");
@@ -1270,11 +1293,11 @@ sub bind {
 	my(@frame);
 	do {@frame = caller ++$lev} while $frame[3] ne '(eval)';
 	@frame = caller --$lev;
-	$self->{'script'} .= "; " if $self->{'script'};
-	$self->{'script'} .= qq($frame[3] in "$frame[1]", line $frame[2]);
+	$self->{script} .= "; " if $self->{script};
+	$self->{script} .= qq($frame[3] in "$frame[1]", line $frame[2]);
     }
-    $self->{'builder'} = $builder;
-    push(@{$self->{'sources'}}, @sources);
+    $self->{builder} = $builder;
+    push(@{$self->{sources}}, @sources);
 }
 
 # File utilities
@@ -1289,16 +1312,16 @@ sub install {
     return if $tp eq $sp;
     return if link($sp, $tp);
     unlink($tp);
-    futil::mkdir($tgt->{'dir'});
+    futil::mkdir($tgt->{dir});
     return if link($sp, $tp);
     futil::copy($sp, $tp);
 }
 
 # Copy one file to another. Arguments are actual file names.
-# Returns undef on failure. Preserves mtime.
+# Returns undef on failure. Preserves mtime and mode.
 sub copy {
     my ($sp, $tp) = @_;
-    my($mtime,$length) = (stat($sp))[$stat::mtime,$stat::length];
+    my($mode, $length, $atime, $mtime) = (stat($sp))[2,7,8,9];
     if (!open(SRC, $sp)) {
 	die("$0: unable to read file $sp ($!)\n");
 	return undef;
@@ -1319,19 +1342,23 @@ sub copy {
     die("$0: error copying file $sp (incorrect length!)\n") if $total != $length;
     close(SRC);
     close(TGT);
+    utime $atime, $mtime, $tp
+	|| die qq($0: can't set modification time for file "$tp" ($!)\n); #'
+    chmod $mode, $tp
+	|| die qq($0: can't set mode on file "$tp" ($!)\n); #'
     return 1;
 }
 
 # Ensure that the specified directory exists.
 # Aborts on failure.
 sub mkdir {
-    return if $_[0]->{'exists'};
-    futil::mkdir($_[0]->{'dir'}); # Recursively make parent.
+    return if $_[0]->{exists};
+    futil::mkdir($_[0]->{dir}); # Recursively make parent.
     my($path) = $_[0]->path;
     if (!-d $path && !mkdir($path, 0777)) {
 	die("$0: can't create directory $path ($!).\n");
     }
-    $dir->{'exists'} = 1;
+    $dir->{exists} = 1;
 }
 
 
@@ -1340,8 +1367,8 @@ package sig::hash;
 
 sub init {
     my($dir) = @_;
-    my($consign) = $dir->path . ".consign";
-    my($dhash) = $dir->{'consign'} = {};
+    my($consign) = $dir->prefix . ".consign";
+    my($dhash) = $dir->{consign} = {};
     if (-f $consign) {
 	open(CONSIGN, $consign) || die("$0: can't open $consign ($!)\n");
 	while(<CONSIGN>) {
@@ -1356,15 +1383,15 @@ sub init {
 
 # Read the hash entry for a particular file.
 sub in {
-    my($dir) = $_[0]->{'dir'};
-    ($dir->{'consign'} || init($dir))->{$_[0]->{'entry'}}
+    my($dir) = $_[0]->{dir};
+    ($dir->{consign} || init($dir))->{$_[0]->{entry}}
 }
 
 # Write the hash entry for a particular file.
 sub out {
     my($file, $sig) = @_;
-    my($dir) = $file->{'dir'};
-    ($dir->{'consign'} || init($dir))->{$file->{'entry'}} = $sig;
+    my($dir) = $file->{dir};
+    ($dir->{consign} || init($dir))->{$file->{entry}} = $sig;
     $sig::hash::dirty{$dir} = $dir;
 }
 
@@ -1373,10 +1400,10 @@ sub END {
     return if $called++; # May be called twice.
     close(CONSIGN); # in case this came in via ^C.
     for $dir (values %sig::hash::dirty) {
-	$consign = $dir->path . ".consign";
+	$consign = $dir->prefix . ".consign";
 	open(CONSIGN, ">$consign") || die("$0: can't create $consign ($!)\n");
 	my($entry, $sig);
-	while(($entry,$sig) = each %{$dir->{'consign'}}) {
+	while(($entry,$sig) = each %{$dir->{consign}}) {
 	    print CONSIGN ("$entry:$sig\n");
 	}
 	close(CONSIGN);
@@ -1404,7 +1431,7 @@ BEGIN {
 
 # Invalidate a cache entry.
 sub invalidate {
-    delete $_[1]->{'sig'}
+    delete $_[1]->{sig}
 }
 
 # Determine the current signature of an already-existing or
@@ -1413,8 +1440,8 @@ sub invalidate {
 # XXXX Should optimize case where srcpath = path, and remove hack
 # in srcpath to look at 'builder'.
 sub signature {
-    if (defined $_[1]->{'sig'}) {
-	return $_[1]->{'sig'};
+    if (defined $_[1]->{sig}) {
+	return $_[1]->{sig};
     }
     my ($self, $file) = @_;
     my($path) = $file->path;
@@ -1422,9 +1449,9 @@ sub signature {
     my($time);
     if ($path ne $src) {
 	if (-f $src) {
-	    $time = (stat(_))[$stat::mtime];
+	    $time = (stat(_))[9];
 	    if (-f $path) {
-		my($ptime) = (stat(_))[$stat::mtime];
+		my($ptime) = (stat(_))[9];
 		if ($time != $ptime) {
 		  futil::install($src, $file);
 		}
@@ -1438,7 +1465,7 @@ sub signature {
 	}
     } else {
 	if (-f $src) {
-	    $time = (stat(_))[$stat::mtime];
+	    $time = (stat(_))[9];
 	}
     }
     if ($time) {
@@ -1446,12 +1473,12 @@ sub signature {
 	if ($sigtime) {
 	    my($htime, $hsig) = split(' ',$sigtime);
 	    if ($htime == $time) {
-		return $file->{'sig'} = $hsig;
+		return $file->{sig} = $hsig;
 	    }
 	}
-	return $file->{'sig'} = $file->{'entry'} . $time;
+	return $file->{sig} = $file->{entry} . $time;
     }
-    $file->{'sig'} = '';
+    $file->{sig} = '';
 }
 
 # Is the provided signature equal to the signature of the current
@@ -1464,9 +1491,9 @@ sub current {
 # Store the signature for a file.
 sub set {
     my($self, $file, $sig) = @_;
-    my($time) = (stat($file->path))[$stat::mtime];
+    my($time) = (stat($file->path))[9];
     sig::hash::out($file, "$time $sig");
-    $file->{'sig'} = $sig
+    $file->{sig} = $sig
 }
 
 # Return an aggregate signature

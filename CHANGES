@@ -1,0 +1,58 @@
+Changes introduced in Cons 1.1
+------------------------------
+
+Change 2412 on 11/12/1996 by rns@rns-me
+
+	Updates to documentation and ancillary files
+	(MANIFEST, README, COPYRIGHT) for release 1.1. Added
+	documentation for Ignore, FilePath, and DirPath, and
+	added command summaries for all directly executable
+	commands. Updated cons version number.
+
+Change 2322 on 11/07/1996 by rns@rns-me
+ 
+	Fix two bugs: bug in build::multiple (reversed parameters!) and
+	a bug or misfeature in that no dependencies past the first ignored
+	directory on PATH were being considered. Now it ignores these dependencies
+	for the purposes of computing a signature, but scans the PATH until
+	the dependency is found.
+ 
+Change 1405 on 09/20/1996 by rns@rns-me
+ 
+	Sort files in each directory before building
+ 
+Change 735 on 07/29/1996 by rns@rns-me
+ 
+	Don't close stdin gratuitously. This way cons can
+	run interactive things.
+ 
+Change 732 on 07/29/1996 by rns@rns-me
+ 
+	Allow shell comment commands. If you set RANLIB to ":",
+	then it won't do a ranlib anymore...
+ 
+Change 726 on 07/26/1996 by rns@rns-me
+ 
+	Fix file copy to preserve mtime and mode. This means
+	that installs into an abs path like /usr/local will 
+	work correctly (preserve x bit, for example).
+ 
+Change 725 on 07/26/1996 by rns@rns-me
+ 
+	Add -V which exits (-v still continues processing)
+ 
+Change 724 on 07/26/1996 by rns@rns-me
+ 
+	Add FilePath and DirPath commands.
+ 
+Change 722 on 07/26/1996 by rns@rns-me
+ 
+	Handle /, /foo correctly. Report on "." correctly.
+	Simplified ->{'...'} references to new form ->{...}.
+ 
+Change 696 on 07/24/1996 by rns@rns-me
+ 
+	Catch SIGPIPE. If you redirect cons output to a pipeline,
+	e.g. tee, then cons was being killed by the PIPE signal,
+	rather than the INT, and hence was not cleaning up correctly.
+ 

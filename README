@@ -1,3 +1,16 @@
+Cons is a software construction system. A description appears under
+"Cons 1.0", below.
+
+Cons 1.1
+
+This is a minor patch release to cons 1.0. This contains a number of
+minor changes, a bug fix affecting multi-target commands, and a couple
+of minor new features. A list of changes from 1.0 to 1.1 is included
+in the file CHANGES. There are no incompatible changes between 1.0 and
+1.1. The NT support is working well here, but it still hasn't been
+integrated into an single version of cons. The changes are quite
+simple, and if anyone wants it let me know.
+
 Cons 1.0
 
 This is a Perl5-based make replacement, but does not provide make
