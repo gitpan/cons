@@ -1,3 +1,20 @@
+@rem = '--*-PERL-*--';
+@rem = '
+@echo off
+rem setlocal
+set ARGS=
+:loop
+if .%1==. goto endloop
+set ARGS=%ARGS% %1
+shift
+goto loop
+:endloop
+rem ***** This assumes PERL is in the PATH *****
+rem $Id: //depot/proj/cons/src/cons.bat.proto#1$
+perl.exe -S cons.bat %ARGS%
+goto endofperl
+@rem ';
+
 #!/usr/bin/env perl
 
 # Cons: A Software Construction Tool.
@@ -2329,3 +2346,6 @@ sub srcsig {
 #   my $buf = unpack("H*", $md5->digest()); print STDOUT "$path=|$buf|\n"; return $buf;
     unpack("H*", $md5->digest());
 }
+
+
+#:endofperl

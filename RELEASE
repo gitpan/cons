@@ -1,0 +1,483 @@
+$Id: //depot/proj/cons/src/RELEASE#6 $
+
+Cons 1.5 ($Id: //depot/proj/cons/src/RELEASE#6 $)
+********************************************************
+
+This release of Cons has a number of changes. Briefly, they are:
+
+- A Repository function, similar to make's VPATH, and
+  supporting functions:  Local, Install_Local, Repository_List,
+  Repository_Sig_Times_OK.
+
+- -R command-line option as a synonym for Repository.
+
+- Bugfix for SplitPath (when given a path with N components, 
+  it returned N**2 components).
+
+- cons-test is now a part of the cons source tree. All new cons features and 
+  releases will undergo cons-test testing and a log file will be attached to 
+  the cons tar file for the curious. We thank Steven Knight for all his
+  efforts in developing cons-test and writing extensive tests for the
+  framework to test cons.
+
+Repository
+==========
+
+A very detailed Repository section has been added to the cons documentation, 
+please refer that for the gory details.
+
+The brief summary (taken from the same documentation source) is as follows:
+
+       Make provides only limited support for building software from code
+       that exists in a central repository directory structure.  The VPATH
+       feature of GNU make (and some other make implementations) is intended
+       to provide this, but doesn't work as expected: it changes the path of
+       target file to the VPATH name too early in its analysis, and
+       therefore searches for all dependencies in the VPATH directory.  To
+       ensure correct development builds, it is important to be able to
+       create a file in a local build directory and have any files in a code
+       repository (a VPATH directory, in make terms) that depend on the
+       local file get rebuilt properly.  This isn't possible with VPATH,
+       without coding a lot of complex repository knowledge directly into
+       the makefiles.
+
+       Cons provides a mechanism to specify a list of code repositories that
+       will be searched, in-order, for source files and derived files not
+       found in the local build directory tree.
+
+       The following lines in a Construct file will instruct Cons to look
+       first under the /usr/experiment/repository directory and then under
+       the /usr/product/repository directory:
+
+         Repository qw (
+               /usr/experiment/repository
+               /usr/product/repository
+         );
+
+       The repository directories specified may contain source files,
+       derived files (objects, libraries and executables), or both.  If
+       there is no local file (source or derived) under the directory in
+       which Cons is executed, then the first copy of a same-named file
+       found under a repository directory will be used to build any local
+       derived files.
+
+       Cons maintains one global list of repositories directories.  Cons
+       will eliminate the current directory, and any non-existent
+       directories, from the list.
+
+       Finding the Construct file in a Repository Cons will also search for
+       Construct and Conscript files in the repository tree or trees.  This
+       leads to a chicken- and-egg situation, though: how do you look in a
+       repository tree for a Construct file if the Construct file tells you
+       where the repository is?  To get around this, repositories may be
+       specified via -R options on the command line:
+
+         % cons -R /usr/experiment/repository -R /usr/product/repository .
+
+       Any repository directories specified in the Construct or Conscript
+       files will be appended to the repository directories specified by
+       command-line -R options.
+
+The RELEASE NOTES for the previous RELEASE (1.4)
+************************************************
+- a QuickScan function that makes it trivial to set up 
+  simple dependency scanners
+
+- improvements in signature calculation for better control of rebuilds
+
+- a caching mechanism for sharing derived files between builds
+
+- new global functions: UseCache, Salt, SourcePath, ConsPath, SplitPath
+
+- Default targets can now be specified using the Default global function.
+
+- Local Help can now be provided for each build tree, accessible through 
+  cons -h 
+
+- some minor cleanup
+
+Please note that when you use this for the first time, your targets
+will all be rebuilt completely, due to signature calculation changes.
+
+Here are the details:
+
+QuickScan
+=========
+
+QuickScan allows simple target-independent scanners to be set up for
+source files. Only one QuickScan scanner may be associated with any
+given source file and environment.
+
+QuickScan is invoked as follows:
+
+	QuickScan CONSENV CODEREF, FILENAME [, PATH]
+
+The subroutine referenced by CODEREF is expected to return a list of
+filenames included directly by FILE. These filenames will, in turn, be
+scanned. The optional PATH argument supplies a lookup path for finding
+FILENAME and/or files returned by the user-supplied subroutine. The
+subroutine is called once for each line in the file, with $_ set to
+the current line. If the subroutine needs to look at additional lines,
+or, for that matter, the entire file, then it may read them itself,
+from the filehandle SCAN. It may also terminate the loop, if it knows
+that no further include information is available, by closing the
+filehandle.
+
+Whether or not a lookup path is provided, QuickScan first tries to
+lookup the file relative to the current directory (for the top-level
+file supplied directly to QuickScan), or from the directory containing
+the file which referenced the file. This is not very general, but
+seems good enough--especially if you have the luxury of writing your
+own utilities and can control the use of the search path in a standard
+way. Finally, the search path is, currently, colon separated. This may
+not make the NT camp happy.
+
+Here's a real example, taken from a Construct file here:
+
+sub cons::SMFgen {
+    my($env, @tables) = @_;
+    foreach $t (@tables) {
+	$env->QuickScan(sub { /\b\S*?\.smf\b/g }, "$t.smf",
+			$env->{SMF_INCLUDE_PATH});
+        $env->Command(
+	    ["$t.smdb.cc","$t.smdb.h","$t.snmp.cc","$t.ami.cc", "$t.http.cc"],
+	    "$t.smf",
+	    q(
+	      smfgen %( %SMF_INCLUDE_OPT %) %<
+	    )
+	);
+    }
+}
+
+[NOTE that the form $env->QuickScan ...  and $env->Command ... should
+not be necessary, but, for some reason, is required for this
+particular invocation. This appears to be a bug in Perl or a
+misunderstanding on my part; this invocation style does not always
+appear to be necessary]
+
+This finds all names of the form <name>.smf in the file. It will
+return the names even if they're found within comments, but that's OK
+(the mechanism is forgiving of extra files; they're just ignored on
+the assumption that the missing file will be noticed when the program,
+in this example, smfgen, is actually invoked).
+
+A scanner is only invoked for a given source file if it is needed by
+some target in the tree. It is only ever invoked once for a given
+source file.
+
+Here is another way to build the same scanner. This one uses an
+explicit code reference, and also (unecessarily, in this case) reads
+the whole file itself:
+
+sub myscan {
+    my(@includes);
+    do {
+	push(@includes, /\b\S*?\.smf\b/g);
+    } while <SCAN>;
+    @includes
+}
+
+Note that the order of the loop is reversed, with the loop test at the
+end. This is because the first line is already read for you. This 
+scanner can be attached to a source file by:
+
+    QuickScan $env \myscan, "$_.smf";
+
+Signature Calculation
+=====================
+
+Signature calculation has been changed in several ways.
+
+First, source files (i.e. files that are not derived from anything)
+that are found within the build tree (i.e. in or below the directory
+containing the Construct file) now have a file signature computed
+directly as the MD5 checksum of the bits in the file. The modification
+time of the file is not considered when generating the signature.  For
+efficiency, source file signatures are cached in the same manner as
+normal derived file signatures. For variant builds, the file in the
+variant tree is treated as the source file, and is scanned in each
+tree. This means that variant builds can still be built in parallel,
+(if they could previously) without risking a race in updating
+signatures.
+
+If the file is not in the build tree, that is, it is an absolute path,
+then the file's signature is determined as it is now: if a valid
+.consign entry (one for which the validation time stamp matches the
+modification time of the file) exists for the file, then that is
+used. Otherwise a signature is calculated based on the modification
+time for the file and its entry name.
+
+Second, it is now possible to control the portions of a target's build
+script--the command lines used to generate a target--that contribute
+to the signature of the target. For anything that uses the basic
+command line build mechanism (i.e. everything except Install), the
+pieces of the script that should not be considered may be bracketed by
+%( and %). These may be nested, and may appear inside expanded %
+variables. As before, %> and %< are not expanded for signature
+calculation. The internal variables _LIBS, _IFLAGS, and _LDIRS, which
+are generated from the LIBS and CPPPATH variables, automatically are
+bracketed by %( and %). This removes the dependency on the exact
+directory path, but the dependency on the actual files included or
+libraries linked against remains.
+
+Third, a Salt command has been added. This should be called at most once
+from the top-level Construct file. This Salts the signature of every
+derived file (but not source files). If you change the salt, you will
+force a complete rebuild of any derived files.
+
+Fourth, build command dependencies have been extended: If a command
+line has semi-colons in it, then Cons looks at the first word after
+each semi-colon (as well as the first word on the line). If it finds
+this on the execution path, then it will try to build it and add the
+signature, of the file to the signature of the target. This may find
+bogus dependencies. For example, the command line:
+	
+	foo ";bar"
+
+will think that "bar" is a dependent and try to build it. Still, if
+Cons knows how to build bar, then it doesn't actually hurt to build
+it, and Cons will not emit any error messages in this case. This is
+similar in spirit to the way #include lines are handled in C files: if
+the #include line is there, it's included in the signature, regardless
+of whether it might not actually be active because of #ifdefs.
+
+This may or not be the right approach for Windows, but won't hurt :-)
+
+These changes are useful in several ways:
+
+- you can now import external files from different places without
+necessarily causing a rebuild. This is useful for large projects which
+are split up into separately buildable modules or libraries. Formerly,
+if I switched to building my own copy of a library, temporarily, then
+all the files in my copy typically had different signatures. Now, as
+long as signature files are maintained for exported libraries, the
+signatures of the resulting files will be the same no matter who built
+the library, or when, or where it is imported from.
+
+- the selective build script signature enabled us to share tools on
+different architectures more easily. Now we can do cross compilations
+on different hosts (of different types), but get the same signatures
+for the derived files.
+
+- the Salt command allows major environmental changes (such as a major
+tool upgrade) to be accounted for by changing the salt.
+
+- dependencies on the build command used to produce a target are
+slightly better. Previously, only the first command would be used,
+even if the command had several. This is still incomplete: Cons does
+not understand about any implicit dependencies, through scripts,
+programs, etc.; nor does it understand shell syntax that could cause a
+command to appear in some other part of the command line (inside back
+ticks, for example).
+
+- these changes make the caching mechanism (below) more effective.
+
+Caching Mechanism
+=================
+
+The new UseCache command allows a cache to be setup to improve build
+efficiency where multiple people in your group are doing builds of
+similar versions of the same software (presumably under some sort of
+configuration management control), or where you, yourself, have
+multiple variants of your software in separate build trees.
+
+This works as follows. Whenever Cons determines that file needs to be
+rederived (because there is no existing file in the build tree with
+the appropriate signature), it first checks to see if the file is
+present in the cache. Presently, the algorithm for mapping to a file
+name is as follows: the signature of the derived file is combined with
+the name of the file, and the MD5 signature is obtained for the
+combination. The hex form of this signature is used as the filename in
+the cache. If the file is present in the cache, then it is hard-linked
+if possible, or alternatively copied into the build
+directory. Otherwise the file is derived in the normal fashion and
+then linked (or copied) back into the cache.
+
+The various signature changes, described above, help to ensure that
+the cache name of the file will be the same when the derived file
+would be essentially the same. An interesting minor side-effect of
+this is that you can make a change to a file, build it, then revert
+the file, and build again. The second time, Cons will recover the
+original derived files from the cache. If you apply an override, and
+then later remove the override, the files will also be retrieved
+from the cache.
+
+The caching mechanism works best if you can arrange that all build
+trees are co-resident with the cache on a disk partition that supports
+hard-links. Caches should be kept separate, on a per-project basis.
+
+Included with this release, there's a new command, cache, which does
+minimal maintenance of a cache directory. It assumes that files are
+hard-linked into the cache, and can delete all files with a link count
+of 1 (and which, therefore, must not be currently in use by any
+build). This could probably be extended to take into account access
+and/or modification times or file sizes (it may be worth keeping the
+smaller variant .o files in the cache, for longer, than it is to keep
+larger archives or executables, which can be relatively quickly
+recreated).
+
+All this is enabled by the UseCache command, which takes the name of a
+cache directory to use, and an optional argument "mixtargets". If the
+directory exists, this command returns 1; otherwise undef. The name
+can be an absolute path, or should be found somewhere above the
+current directory. For example, we have one project with three
+separate but related builds. I have placed a common cache directory at
+the same level as the user project directories, and each of the builds
+has a line like:
+
+  UseCache("cache/<buildname>") || warn("cache directory not found");
+
+This searches up the tree until it finds "cache/<buildname>" for some
+value of <buildname> specific to the Construct file.
+
+Someone building this outside of our environment won't use our cache
+directory. This is potentially useful for separating out development
+environments from Q/A build environments, for example (it makes sense
+for the Q/A people to either not have a cache or to have their own).
+
+The optional argument to UseCache, "mixtargets", may be specified to
+allow multiple targets to share a single cache file if the target
+signature is identical. While this option does have applicability,
+it's use is not, in general, recommended, and it may be deprecated in
+the future if some other way is found to accomodate this
+functionality. If this option is used, please note that all derived
+file signatures will change, forcing a rebuild if the option wasn't
+previously used.
+
+Command line switches that control aspects of caching:
+
+  -cc           Show command that would have been executed, when
+	        retrieving from cache. No indication that the file
+	        has been retrieved is given; this is useful for 
+	        generating build logs that can be compared with
+	        real build logs.
+
+  -cd           Disable all caching. Do not retrieve from cache nor
+	        flush to cache.
+
+  -cr           Build dependencies in random order. This is useful when
+	        building multiple similar trees with caching enabled.
+
+  -cs           Synchronize existing build targets that are found to be
+	        up-to-date with cache. This is useful if caching has
+	        been disabled with -cc or just recently enabled with
+	        UseCache.
+
+
+New Global Functions
+====================
+
+Four new global functions have been introduced: UseCache, Salt,
+SourcePath, ConsPath, and SplitPath.
+
+UseCache and Salt were discussed previously.
+
+SourcePath returns the real source pathname of a file, as opposed to
+the pathname you see in a build directory. This is invoked by:
+
+	$path = SourcePath <buildpath>;
+
+ConsPath returns true if the supplied path is a derivable file known
+by Cons, undef otherwise. This function will not succeed unless Cons
+already knows about the specified file.
+
+	$result = ConsPath <path>;
+
+SplitPath lookups up several directory names on a colon-separated
+path, relative to the current build directory, and returns the fully
+qualified names. This will convert names prefixed with # to the
+appropriate top-level build name (with no #), and will convert
+relative names to top-level names.
+
+An example taken from one of the builds here:
+
+	$SMF_INCLUDE_PATH           = "#build/$target_arch/include/table";
+	$SMF_INCLUDE_OPT  	    = "-I" . join(" -I", SplitPath(
+							 $SMF_INCLUDE_PATH));
+
+This is used to set up the path used by QuickScan for this utility. The path
+is turned into a series of -I flags that are proper top-level file names.
+
+Default Targets
+===============
+
+Since it seems like being able to specify a default target or
+targets would be useful, very straightforward support for a "Default" 
+function was added that will let you specify a list of targets
+to be built if no targets are specified on the command line.  With
+this addition, the following in a Construct file:
+
+        Default qw(
+                .
+        );
+
+will then build the world by default.  You can, of course, specify
+any arbitrary list of targets if the appropriate default behavior
+would be to only build a subset of your world.  This maintains
+backwards-compatibility with the existing behavior for Construct
+files that don't specify Default.
+
+Local Help
+==========
+
+Since each build tree is quite different, and there should be a uniform
+way of finding out how to build the tree, the '-h' flag in cons was 
+created.
+
+Since the local help is actually to provide help on how to use the current
+build tree, it should be placed at the top of the toplevel script (Construct
+usually).
+
+This can be done in two ways:
+
+For brief help strings:
+-----------------------
+# Help local to the current build tree. (given out by cons -h)
+# This should always be the first thing on the script.
+
+@help = qq(
+This is the <project> build system.
+
+The flags to build are:
+
+...
+);
+eval 'Help (@help)';
+warn "Warning: Local Help functionality not supported in this " .
+     "version of cons\n" if $@;
+
+
+For extensive documentation 
+---------------------------
+
+It is better that this documentation be placed in a separate file that the
+users can read, like README, or README.CONS.
+
+This can also be made accessible through the help system by the following 
+lines:
+
+# Help local to the current build tree. (given out by cons -h)
+# This should always be the first thing on the script.
+
+if ( -f "README.CONS") {
+    open README, "README.CONS";
+    push @help, <README>;
+    close README;
+    eval 'Help @help';
+    warn "Warning: Local Help functionality not supported in this " .
+         "version of cons.\n" if $@;
+
+}
+
+General Cleanup
+===============
+
+This release cleans up some random things I happened across. One
+notable instance is that code has been included to catch the condition
+where a name is used both as a directory and as a file.
+
+
+Please send any comments to the cons-discuss (cons-discuss@eng.fore.com)
+list, or to me at rns@fore.com.
+
+Bob Sidebotham

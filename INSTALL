@@ -1,0 +1,30 @@
+$Id: //depot/proj/cons/src/INSTALL#3$
+
+This cons distribution contains the following files:
+
+INSTALL	  - This file.
+CHANGES	  - Change log for cons.
+README	  - Explanation of software.
+RELEASE	  - Release Notes for current distribution.
+cons	  - The cons program
+cons.bat  - cons as an MS-DOS batch file.
+cons.pod  - A Perl pod documentation of cons.
+cons.1	  - A nroff-formatted manual page documentation of cons.
+cons.html - HTML formatted cons documentation.
+test.log  - The log file from a test of cons under the cons-test suite.
+
+To use cons, install the 'cons' program to a location where you other
+binaries, like /usr/local/bin
+
+Win-NT users can execute the cons program in 2 ways:
+
+       1. Rename it to cons.pl and associate the .pl suffix with perl so
+          that Windows will always execute the program inside perl.
+       2. Run cons.bat.  Make sure that perl is in your
+	  path when use do this.
+
+Users may generate various types of documentation with the pod file using
+the pod2* utilities available with the perl distribution. Alternately, users 
+can use the man page cons.1 supplied with this distribution and move it to a 
+location in your manpath (e.g. /usr/local/man/man1) and use the UNIX man
+command (man cons) to view cons documentation.

@@ -1,58 +1,132 @@
-Changes introduced in Cons 1.1
-------------------------------
+Cons is a software construction system. A description appears under
+"Cons 1.0", below.
 
-Change 2412 on 11/12/1996 by rns@rns-me
+$Id: //depot/proj/cons/src/CHANGES#4 $
 
-	Updates to documentation and ancillary files
-	(MANIFEST, README, COPYRIGHT) for release 1.1. Added
-	documentation for Ignore, FilePath, and DirPath, and
-	added command summaries for all directly executable
-	commands. Updated cons version number.
+Cons 1.5
+********
+- Added Repository global function, similar to make's VPATH, and
+  supporting functions:  Local, Install_Local, Repository_List,
+  Repository_Sig_Times_OK.
 
-Change 2322 on 11/07/1996 by rns@rns-me
- 
-	Fix two bugs: bug in build::multiple (reversed parameters!) and
-	a bug or misfeature in that no dependencies past the first ignored
-	directory on PATH were being considered. Now it ignores these dependencies
-	for the purposes of computing a signature, but scans the PATH until
-	the dependency is found.
- 
-Change 1405 on 09/20/1996 by rns@rns-me
- 
-	Sort files in each directory before building
- 
-Change 735 on 07/29/1996 by rns@rns-me
- 
-	Don't close stdin gratuitously. This way cons can
-	run interactive things.
- 
-Change 732 on 07/29/1996 by rns@rns-me
- 
-	Allow shell comment commands. If you set RANLIB to ":",
-	then it won't do a ranlib anymore...
- 
-Change 726 on 07/26/1996 by rns@rns-me
- 
-	Fix file copy to preserve mtime and mode. This means
-	that installs into an abs path like /usr/local will 
-	work correctly (preserve x bit, for example).
- 
-Change 725 on 07/26/1996 by rns@rns-me
- 
-	Add -V which exits (-v still continues processing)
- 
-Change 724 on 07/26/1996 by rns@rns-me
- 
-	Add FilePath and DirPath commands.
- 
-Change 722 on 07/26/1996 by rns@rns-me
- 
-	Handle /, /foo correctly. Report on "." correctly.
-	Simplified ->{'...'} references to new form ->{...}.
- 
-Change 696 on 07/24/1996 by rns@rns-me
- 
-	Catch SIGPIPE. If you redirect cons output to a pipeline,
-	e.g. tee, then cons was being killed by the PIPE signal,
-	rather than the INT, and hence was not cleaning up correctly.
- 
+- Added -R command-line option as a synonym for Repository.
+
+- Bugfix for SplitPath (when given a path with N components, 
+  it returned N**2 components).
+
+Cons 1.4a3
+**********
+- Construction local help can now be provided by defining at the top of 
+  toplevel script, the following:
+  Help qq( all the help material);
+  
+Cons 1.4a2
+**********
+- LIBPATH, CPPPATH, and program search path ENV->{PATH} may all now
+  be arrays. The old usage (colon separated strings) is deprecated, but
+  still supported. In the old form, on Unix, ":"'s separate path components,
+  and on Windows, ";" separates them.
+
+- PATH_SEPERATOR was finally changed to PATH_SEPARATOR
+
+- Default target support has been added (see RELEASE for details).
+
+Cons 1.4 (alpha1)
+*****************
+
+This release of Cons has a number of changes. Briefly, they are:
+
+ - a QuickScan function that makes it trivial to set up 
+   simple dependency scanners
+
+ - improvements in signature calculation for better control of rebuilds
+
+ - a caching mechanism for sharing derived files between builds
+
+ - new global functions: UseCache, Salt, SourcePath, ConsPath.
+
+ - some minor cleanup
+
+Cons 1.3.1
+**********
+
+This is a minor release with limited shared library support. Documentation
+is now maintained in pod format, thanks to the cons.pod file from
+Ulrich Pfiefer.
+
+Cons 1.3
+********
+
+This is the first combined Win32 and unix cons. This contains some
+significant fixes that enables the same cons file to be used for both
+platforms.
+
+Cons 1.2
+********
+
+This is the WIN32 port of cons.
+
+Cons 1.1
+********
+
+This is a minor patch release to cons 1.0. This contains a number of
+minor changes, a bug fix affecting multi-target commands, and a couple
+of minor new features. A list of changes from 1.0 to 1.1 is included
+in the file CHANGES. There are no incompatible changes between 1.0 and
+1.1. The NT support is working well here, but it still hasn't been
+integrated into an single version of cons. The changes are quite
+simple, and if anyone wants it let me know.
+
+Cons 1.0
+********
+
+This is a Perl5-based make replacement, but does not provide make
+compatibility.
+
+You will need Perl 5.002 or better and the Perl MD5 Extension
+(MD5-1.6.tar.gz), available from CPAN.
+
+This program is known to work on a variety of platforms: it's in
+production use on versions of SunOS, Solaris, HPUX, AIX, and IRIX.
+
+The current program will not work correctly on Windows/NT, but we do
+have an internal version that does appear to work on that platform,
+but has not been well tested. If anyone is interested, contact me.
+	
+PostScript documentation is in cons.ps.
+
+The following is an excerpt from the introduction in cons.ps:
+
+ Cons is a system for constructing, primarily, software, but is quite
+ different from previous software construction systems. Cons was
+ designed from the ground up to deal easily with the construction of
+ software spread over multiple source directories. Cons makes it easy
+ to create build scripts that are simple, understandable and
+ maintainable. Cons ensures that complex software is easily and
+ accurately reproducible.
+
+ Cons uses a number of techniques to accomplish all of this.
+ Construction scripts are just Perl scripts, making them both easy to
+ comprehend and very flexible. Global scoping of variables is replaced
+ with an import/export mechanism for sharing information between
+ scripts, significantly improving the readability and maintainability
+ of each script. Construction environments are introduced: these are
+ Perl objects that capture the information required for controlling the
+ build process. Multiple environments are used when different semantics
+ are required for generating products in the build tree. Cons
+ implements automatic dependency analysis and uses this to globally
+ sequence the entire build. Variant builds are easily produced from a
+ single source tree. Intelligent build subsetting is possible, when
+ working on localized changes. Overrides can be setup to easily
+ override build instructions without modifying any scripts. MD5
+ cryptographic signatures are associated with derived files, and are
+ used to accurately determine whether a given file needs to be rebuilt.
+
+Complaints, suggestions, kudos, etc. to:
+
+	Bob Sidebotham
+	rns@fore.com
+	1-412-635-3366
+
+	FORE Systems
+	Pittsburgh, PA.

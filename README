@@ -1,65 +1,24 @@
-Cons is a software construction system. A description appears under
-"Cons 1.0", below.
+$Id: //depot/proj/cons/src/README#3 $
 
-Cons 1.1
-
-This is a minor patch release to cons 1.0. This contains a number of
-minor changes, a bug fix affecting multi-target commands, and a couple
-of minor new features. A list of changes from 1.0 to 1.1 is included
-in the file CHANGES. There are no incompatible changes between 1.0 and
-1.1. The NT support is working well here, but it still hasn't been
-integrated into an single version of cons. The changes are quite
-simple, and if anyone wants it let me know.
-
-Cons 1.0
-
-This is a Perl5-based make replacement, but does not provide make
-compatibility.
+This is a Perl-based make replacement, but does not provide make
+compatibility. It has a number of powerful capabilities not found in other
+software construction systems, including make.
 
 You will need Perl 5.002 or better and the Perl MD5 Extension
-(MD5-1.6.tar.gz), available from CPAN.
+(MD5-1.6.tar.gz or greater), available from CPAN.
 
-This program is known to work on a variety of platforms: it's in
-production use on versions of SunOS, Solaris, HPUX, AIX, and IRIX.
+This program is known to work on a variety of platforms: it's in production
+use on versions of FreeBSD, Linux, SunOS, Solaris, HPUX, AIX, IRIX and NT.
 
-The current program will not work correctly on Windows/NT, but we do
-have an internal version that does appear to work on that platform,
-but has not been well tested. If anyone is interested, contact me.
-	
-PostScript documentation is in cons.ps.
+Documentation is supplied in POD format (thanks to Ulrich Pfiefer).
 
-The following is an excerpt from the introduction in cons.ps:
+A cons discussion group, cons-discuss@eng.fore.com, has been created.  If
+you wish to subscribe, send mail to cons-discuss-request@eng.fore.com with
+the word "subscribe" in the BODY of the message. Please send all comments,
+requests, complaints, etc. to the mailing list.
 
- Cons is a system for constructing, primarily, software, but is quite
- different from previous software construction systems. Cons was
- designed from the ground up to deal easily with the construction of
- software spread over multiple source directories. Cons makes it easy
- to create build scripts that are simple, understandable and
- maintainable. Cons ensures that complex software is easily and
- accurately reproducible.
+Cons is maintained by members of the cons-discuss mailing list.
 
- Cons uses a number of techniques to accomplish all of this.
- Construction scripts are just Perl scripts, making them both easy to
- comprehend and very flexible. Global scoping of variables is replaced
- with an import/export mechanism for sharing information between
- scripts, significantly improving the readability and maintainability
- of each script. Construction environments are introduced: these are
- Perl objects that capture the information required for controlling the
- build process. Multiple environments are used when different semantics
- are required for generating products in the build tree. Cons
- implements automatic dependency analysis and uses this to globally
- sequence the entire build. Variant builds are easily produced from a
- single source tree. Intelligent build subsetting is possible, when
- working on localized changes. Overrides can be setup to easily
- override build instructions without modifying any scripts. MD5
- cryptographic signatures are associated with derived files, and are
- used to accurately determine whether a given file needs to be rebuilt.
+The official cons web site is http://www.dsmit.com/cons
 
-Complaints, suggestions, kudos, etc. to:
-
-	Bob Sidebotham
-	rns@fore.com
-	1-412-635-3366
-
-	FORE Systems
-	Pittsburgh, PA.
+An article about Cons appeared in The Perl Journal, issue #9, Spring 1998.

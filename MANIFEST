@@ -1,8 +1,11 @@
-Cons 1.1 packing list
-
-CHANGES			a list of changes introduced in 1.1
-COPYRIGHT		copyright information
-README			read me first
-MANIFEST		this file
-cons.ps			PostScript documentation
-cons			the program
+test.log
+CHANGES
+COPYRIGHT
+INSTALL
+README
+RELEASE
+cons
+cons.bat
+cons.pod
+cons.1
+cons.html
