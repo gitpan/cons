@@ -1,12 +1,117 @@
 Cons is a software construction system. A description appears under
 "Cons 1.0", below.
 
-$Id: CHANGES,v 1.52.2.1 2000/09/14 18:27:48 knight Exp $
+$Id: CHANGES,v 1.81 2000/09/10 04:59:21 knight Exp $
 
-Cons 2.0.2
+Cons 2.1.2
 **********
 
-- Add RPM and Debian packages for easier installation.
+- Unlink after rename of similarly named files, per Unix98. (Reported
+  by Bradley White.)
+
+- Allow %% to insert a single % anywhere in a command line, even when
+  surrounded by non-whitespace.  A lone % still gets passed through
+  untouched, but a lone %% now becomes %.
+
+- Cons (and all tests) are now completely Perl -w clean.
+
+- Add support for changing directory to the containing directory
+  of Conscript files, controlled by a Conscript_chdir() method,
+  and disabled by default (preserving current behavior).
+  This allows file globbing via Perl's <*.c> syntax.
+
+- When building all targets in a directory, explicitly skip '.' and
+  '..' instead of skipping all entries begining with '.', to allow
+  specification of targets with initial '.' names.
+
+- Use $Config{} to fetch the platform's file suffixes.  Put these
+  in a platform-independent default environment.  Put the rest of
+  what used to be the default environment into a separate-but-equal
+  UNIX defaults "overrides" hash, like the Win32 overrides.  This will
+  all help future portability to other platforms.
+
+- We now call $env->_subst() to expand variables from the construction
+  environment in source and target file names for all cons methods.
+  Existing tests have been modified to verify this for all tested
+  methods.
+  (Bug reported by Johan Holmberg.)
+
+- Change the case-insensitive mapping for initial drive letters from
+  lower-case to upper-case.  This better conforms to the canonical
+  Win32 representation.
+
+- Make futil::copy more robust:  Use chmod() to make the file writable
+  before calling utime() (permissions govern the ability to modify file
+  times on some operating systems), and then chmod back to the desired
+  mode if needed.
+
+- Fetch a command's exit status by looking at the proper upper-order
+  bits on Win32, too.  We were reporting an exit status of 1 as 256,
+  for example.  Move where this happens so the WIN32 logic is grouped.
+
+- The internal File::Spec::splitpath method wasn't recognizing UNC
+  volume names; now it does.
+  (Bug reported by Bruce Leverett.)
+
+- Add a file::addsuffix call to the Program method so it can append
+  SUFEXE if it's not already there, like the Library method appends
+  SUFLIB.  This will increase Construct/Conscript file portability by
+  allowing people to drop the ".exe" from the Program specification,
+  like they do with ".lib" for libraries.
+  (Reported by M. C. Srivas.)
+
+Contributions from Johan Holmberg <holmberg@iar.se>
+
+- Make Cons execute cleanly under "use strict" (-Mstrict).
+
+Cons 2.1.1
+**********
+
+- First separate development release.
+
+- Specifying a directory target on the command line wouldn't work with
+  -t because it didn't add the updir entry ('..') when it re-blessed
+  the target from a generic entry to a directory.
+  (Bug reported by Damien Neil.)
+
+- Executing cons -t from the top level directory unnecessarily prefixed
+  all targets with the current working directory path name.  No longer.
+
+- Handle WIN32 case-insensitive initial drive letters (C: is the same as
+  c:).  Add an internal File::Spec::case_tolerant method (parallel to the
+  real interface) to decide whether we should lower-case the volume name.
+  (Bug reported by Greg Spencer.)
+
+- Add file name and line numbers to the error messages for ignoring
+  a non-existent Conscript file and attempting to build a target two
+  different ways.
+
+Contributions from Johan Holmberg <holmberg@iar.se>
+
+- Change an explicit check for "file" targets in a directory being
+  built to a less-restrictive check for any non-"dir" targets.  This
+  preserves existing behavior if the target is an "entry" (as can
+  happen via the Depends directive).
+
+Contributions from Damien Neil <neild@centauri.org>
+
+- Fix %[ %] processing to match multiple whitespace characters and
+  suppress zero-length arguments.
+
+- Remove "use File::Spec" since we ship our own internal copy.
+
+Contributions from Gary Oberbrunner <garyo@genarts.com>
+
+- When using -d, add a "Rebuilding" line to the output to identify what's
+  being rebuilt (and, implicitly, what's causing the rebuild).
+
+- When computing the signature of a file's contents, add a binmode() call
+  to the file handle so end-of-file character values (like ^Z on WIN32)
+  won't prematurely terminate signature calculation.
+
+Contributions from Juan Altmayer Pizzorno <juan@port25.com>
+
+- In the Win32 'CXXCOM' command, change the '-c' to '/c' for consistency.
 
 Cons 2.0.1
 **********
@@ -272,7 +377,7 @@ This is a minor release with limited shared library support contributed by
 Gary Oberbrunner <garyo@genarts.com>.
 
 Documentation is now maintained in pod format, thanks to the cons.pod file
-from Ulrich Pfiefer.
+from Ulrich Pfeifer.
 
 Cons 1.3
 ********

@@ -93,7 +93,7 @@
 .nr % 0
 .rr F
 .\}
-.TH CONS 1 "2.0.2" "14/Sep/2000" "Cons - Software Construction System"
+.TH CONS 1 "2.1.2" "13/Sep/2000" "Cons - Software Construction System"
 .UC
 .if n .hy 0
 .if n .na
@@ -188,15 +188,9 @@
 .\}
 .rm #[ #] #H #V #F C
 .SH "NAME"
-Cons \- Cons: A Software Construction System
+Cons \- A Software Construction System
 .SH "DESCRIPTION"
-The original document was automatically derived from the \fIcons/cons.html\fR
-by \fBhtml2pod\fR, thanks to Ulrich Pfiefer. Later revisions were created from
-the original.
-.SH "Cons: A Software Construction System"
-by Bob Sidebotham, et al. \fIcons-discuss@gnu.org\fR
-.PP
-A guide and reference for version 2.0.2
+A guide and reference for version 2.1.2
 .PP
 Copyright (c) 1996-2000 Free Software Foundation, Inc.
 .PP
@@ -466,6 +460,28 @@ top-level. Hybrid schemes are also possible. A separately maintained
 component that needs to be incorporated into a build tree, for example,
 might hook into the build tree in one place, but define its own construction
 hierarchy.
+.PP
+By default, Cons does not change its working directory to the directory
+containing a subsidiary \fIConscript\fR file it is including.  This behavior
+can be enabled for a build by specifying, in the top-level \fIConstruct\fR
+file:
+.PP
+.Vb 1
+\&        Conscript_chdir 1;
+.Ve
+When enabled, Cons will change to the subsidiary \fIConscript\fR file's
+containing directory while reading in that file, and then change back
+to the top-level directory once the file has been processed.
+.PP
+It is expected that this behavior will become the default in some future
+version of Cons.  To prepare for this transition, builds that expect
+Cons to remain at the top of the build while it reads in a subsidiary
+\fIConscript\fR file are encouraged to explicitly disable this feature
+as follows:
+.PP
+.Vb 1
+\&        Conscript_chdir 0;
+.Ve
 .Sh "Relative, top-relative, and absolute file names"
 You may have noticed that the file names specified to the Build command are
 relative to the location of the script it is invoked from. This is generally
@@ -1474,10 +1490,11 @@ writing, the default list of construction variables is defined as follows:
 On Win32 systems (Windows \s-1NT\s0), the following construction variables
 are overridden in the default:
 .PP
-.Vb 19
+.Vb 20
 \&  CC            => 'cl',
 \&  CFLAGS        => '/nologo',
 \&  CCCOM         => '%CC %CFLAGS %_IFLAGS /c %< /Fo%>',
+\&  CXXCOM        => '%CXX %CXXFLAGS %_IFLAGS /c %< /Fo%>',
 \&  INCDIRPREFIX  => '/I',
 \&  LINK          => 'link',
 \&  LINKCOM       => '%LINK %LDFLAGS /out:%> %< %_LDIRS %LIBS',
@@ -1542,6 +1559,21 @@ command. For the utmost reproducibility, you should really arrange to set
 your own execution path, in your top-level \fIConstruct\fR file (or perhaps by
 importing an appropriate construction package with the Perl \f(CWuse\fR
 command). The default variables are intended to get you off the ground.
+.Sh "Interpolating construction variables"
+Construction environment variables may be interpolated in the source and
+target file names by prefixing the construction variable name with \f(CW%\fR.
+.PP
+.Vb 5
+\&  $env = new cons(
+\&        DESTDIR =>      'programs',
+\&        SRCDIR  =>      'src',
+\&  );
+\&  Program $env '%DESTDIR/hello', '%SRCDIR/hello.c';
+.Ve
+Expansion of construction variables is recursive\*(--that is, the file
+\fIname\fR\|(s) will be re-expanded until no more substitutions can be made. If
+a construction variable is not defined in the environment, then the null
+string will be substituted.
 .SH "Default construction methods"
 The list of default construction methods includes the following:
 .Sh "The \f(CWnew\fR constructor"
@@ -1663,7 +1695,8 @@ Within the construction command, any variable from the construction
 environment may be introduced by prefixing the name of the construction
 variable with \f(CW%\fR. This is recursive: the command is expanded until no more
 substitutions can be made. If a construction variable is not defined in the
-environment, then the null string will be substituted.
+environment, then the null string will be substituted.  A doubled \f(CW%%\fR
+will be replaced by a single \f(CW%\fR in the construction command.
 .PP
 There are several pseudo variables which will also be expanded:
 .Ip "%>" 10
@@ -1830,23 +1863,30 @@ specified object files. It is invoked in the following manner:
 .Vb 1
 \&  Program $env <program name>, <source or object files>;
 .Ve
+The program name will have the value of the \f(CWSUFEXE\fR construction
+variable appended (by default, \f(CW.exe\fR on Win32 systems, nothing on Unix
+systems) if the suffix is not already present.
+.PP
 Source files may be specified in place of objects files\*(--the \f(CWObjects\fR
 method will be invoked to arrange the conversion of all the files into
 object files, and hence all the observations about the \f(CWObjects\fR method,
-above, apply to this method also. The actual linking of the program will be
-handled by an external command which results from expanding the \f(CWLINKCOM\fR
-construction variable, with \f(CW%<\fR set to the object files to be linked (in
-the order presented), and \f(CW%>\fR set to the target (see the \f(CWCommand\fR method
-for expansion details). The user may set additional variables in the
-construction environment, including \f(CWLINK\fR, to define which program to use
-for linking, \f(CWLIBPATH\fR, a colon-separated list of library search paths, for
-use with library specifications of the form \fI\-llib\fR, and \f(CWLIBS\fR,
-specifying the list of libraries to link against (in either \fI\-llib\fR form or
-just as pathnames. Relative pathnames in both \f(CWLIBPATH\fR and \f(CWLIBS\fR are
-interpreted relative to the directory in which the associated construction
-environment created (absolute and top-relative names may also be used). Cons
-automatically sets up dependencies on any libraries mentioned in \f(CWLIBS\fR:
-those libraries will be built before the command is linked.
+above, apply to this method also.
+.PP
+The actual linking of the program will be handled by an external command
+which results from expanding the \f(CWLINKCOM\fR construction variable, with
+\f(CW%<\fR set to the object files to be linked (in the order presented),
+and \f(CW%>\fR set to the target (see the \f(CWCommand\fR method for expansion
+details). The user may set additional variables in the construction
+environment, including \f(CWLINK\fR, to define which program to use for
+linking, \f(CWLIBPATH\fR, a colon-separated list of library search paths,
+for use with library specifications of the form \fI\-llib\fR, and \f(CWLIBS\fR,
+specifying the list of libraries to link against (in either \fI\-llib\fR
+form or just as pathnames. Relative pathnames in both \f(CWLIBPATH\fR and
+\f(CWLIBS\fR are interpreted relative to the directory in which the associated
+construction environment is created (absolute and top-relative names may
+also be used). Cons automatically sets up dependencies on any libraries
+mentioned in \f(CWLIBS\fR: those libraries will be built before the command
+is linked.
 .Sh "The \f(CWLibrary\fR method"
 The \f(CWLibrary\fR method arranges to create the specified library from the
 specified object files. It is invoked as follows:
@@ -1854,20 +1894,26 @@ specified object files. It is invoked as follows:
 .Vb 1
 \&  Library $env <library name>, <source or object files>;
 .Ve
+The library name will have the value of the \f(CWSUFLIB\fR construction
+variable appended (by default, \f(CW.lib\fR on Win32 systems, \f(CW.a\fR on Unix
+systems) if the suffix is not already present.
+.PP
 Source files may be specified in place of objects files\*(--the \f(CWObjects\fR
 method will be invoked to arrange the conversion of all the files into
 object files, and hence all the observations about the \f(CWObjects\fR method,
-above, apply to this method also. The actual creation of the library will be
-handled by an external command which results from expanding the \f(CWARCOM\fR
-construction variable, with \f(CW%<\fR set to the library members (in the order
-presented), and \f(CW%>\fR to the library to be created (see the \f(CWCommand\fR
-method for expansion details). The user may set variables in the
-construction environment which will affect the operation of the
-command. These include \f(CWAR\fR, the archive program to use, \f(CWARFLAGS\fR, which
-can be used to modify the flags given to the program specified by \f(CWAR\fR, and
-\f(CWRANLIB\fR, the name of a archive index generation program, if needed (if the
-particular need does not require the latter functionality, then \f(CWARCOM\fR
-must be redefined to not reference \f(CWRANLIB\fR).
+above, apply to this method also.
+.PP
+The actual creation of the library will be handled by an external
+command which results from expanding the \f(CWARCOM\fR construction variable,
+with \f(CW%<\fR set to the library members (in the order presented),
+and \f(CW%>\fR to the library to be created (see the \f(CWCommand\fR method
+for expansion details). The user may set variables in the construction
+environment which will affect the operation of the command. These
+include \f(CWAR\fR, the archive program to use, \f(CWARFLAGS\fR, which can be
+used to modify the flags given to the program specified by \f(CWAR\fR, and
+\f(CWRANLIB\fR, the name of a archive index generation program, if needed
+(if the particular need does not require the latter functionality,
+then \f(CWARCOM\fR must be redefined to not reference \f(CWRANLIB\fR).
 .PP
 The \f(CWLibrary\fR method allows the same library to be specified in multiple
 method invocations. All of the contributing objects from all the invocations
@@ -2295,24 +2341,36 @@ can be attached to a source file by:
 .Vb 1
 \&    QuickScan $env \emyscan, "$_.smf";
 .Ve
-.SH "Support and Suggestions"
+.SH "SUPPORT AND SUGGESTIONS"
 Cons is maintained by the user community.  To subscribe, send mail to
 \fBcons-discuss-request@gnu.org\fR with body \fBsubscribe\fR.
 .PP
-Please report any bugs/fixes/suggestions through the
-cons-discuss@gnu.org mailing list.
+Please report any suggestions through the \fBcons-discuss@gnu.org\fR mailing
+list.
+.SH "BUGS"
+Sure to be some. Please report any bugs through the \fBbug-cons@gnu.org\fR
+mailing list.
+.SH "INFORMATION ABOUT CONS"
+Information about CONS can be obtained from the official cons web site
+\fBhttp://www.dsmit.com/cons/\fR or its mirrors listed there.
 .PP
-The Official cons site is: http://www.dsmit.com/cons/
+The cons maintainers can be contacted by email at
+\fBcons-maintainers@gnu.org\fR
+.SH "AUTHORS"
+Originally by Bob Sidebotham. Then significantly enriched by the members
+of the Cons community \fBcons-discuss@gnu.org\fR.
+.PP
+The Cons community would like to thank Ulrich Pfeifer for the original pod
+documentation derived from the \fIcons.html\fR file. Cons documentation is now
+a part of the program itself.
 
 .rn }` ''
 .IX Title "CONS 1"
-.IX Name "Cons - Cons: A Software Construction System"
+.IX Name "Cons - A Software Construction System"
 
 .IX Header "NAME"
 
 .IX Header "DESCRIPTION"
-
-.IX Header "Cons: A Software Construction System"
 
 .IX Header "Introduction"
 
@@ -2411,6 +2469,8 @@ The Official cons site is: http://www.dsmit.com/cons/
 .IX Header "More on construction environments"
 
 .IX Subsection "Default construction variables"
+
+.IX Subsection "Interpolating construction variables"
 
 .IX Header "Default construction methods"
 
@@ -2522,5 +2582,11 @@ The Official cons site is: http://www.dsmit.com/cons/
 
 .IX Header "Using and writing dependency scanners"
 
-.IX Header "Support and Suggestions"
+.IX Header "SUPPORT AND SUGGESTIONS"
+
+.IX Header "BUGS"
+
+.IX Header "INFORMATION ABOUT CONS"
+
+.IX Header "AUTHORS"
 

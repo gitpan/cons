@@ -1,13 +1,13 @@
-$Id: README,v 1.6.2.1 2000/09/14 18:27:48 knight Exp $
+$Id: README,v 1.9 2000/09/14 18:28:16 knight Exp $
 
 Cons is a Perl-based make replacement.  It is not compatible with make,
 but has a number of powerful capabilities not found in other software
 construction systems, including make.
 
-This package contains a stable release of Cons and its documentation.
-Cons is also available in development releases, intended for advanced
-features and quick delivery of bug fixes.  Development releases of Cons
-have odd-digit minor version numbers (2.1.x, 2.3.x, etc.).
+This package contains a development release of Cons and its documentation.
+Development releases are intended for advanced features and quick delivery
+of bug fixes.  If you are looking for the latest stable release, look
+for an even-digit minor version number (2.0.x, 2.2.x, etc.).
 
 A related package (cons-test) contains a portable test suite for Cons,
 plus a wrapper script and supporting modules for executing the tests.

@@ -1,41 +1,59 @@
-$Id: RELEASE,v 1.15.2.1 2000/09/14 18:27:48 knight Exp $
+$Id: RELEASE,v 1.19 2000/09/13 16:26:50 knight Exp $
 
-Cons 2.0.2 ($Id: RELEASE,v 1.15.2.1 2000/09/14 18:27:48 knight Exp $)
-*************************************************************
-
-This release adds RPM and Debian packages for easier installation on
-Linux systems.  There are no changes to the Cons script itself from the
-2.0.1 release.
-
-Cons 2.0.1
+Cons 2.1.2
 **********
 
-This release fixes a couple of bugs found *just after* 2.0
-was released.
+This release contains a great many small changes for portability and
+general clean-up, most of which should not be noticed by most users.
 
-It affects users of QuickScan and SplitPath, and win32 users
-building C++ objects with cons.
+Visible changes include:
 
-See CHANGES for details.
+    --	A fix for UNC path names (\\share\dir\subdir\file) on Windows NT.
 
-Cons 2.0
-********
+    --	A new Conscript_chdir() method that can be used to enable
+	Perl file-globbing in subsidiary Conscript files.
 
-This is a stable release of Cons. The development release was
-named 1.8b2, but the stable release has taken a new version
-number, 2.0 (see below).
+    --	Correct exit-status reporting on Windows NT, including
+	identifying failures to find a program in the search path.
 
-The major achievements in this release are so many that it doesn't
-make much sense in duplicating the information already available
-in the CHANGES file. Please see CHANGES for details.
+    --	There is now a separate cons-tests package that contains
+	the regression tests and a productized cons-test script
+	for executing them.
 
-I would generally like to thank all the contributors to this release
-specifically like to thank Steven Knight for all the effort that
-he has put in to making this release possible.
+    --	The cons and cons-test packages are now available in both
+	RPM and Debian formats.
 
-I would also like to thank the Marconi Communications (formerly FORE Systems)
-management for having released `cons' under the GNU General Public License
-(GPL). The version number change was to mark the new beginning of `cons'
-as a GPL'd program.
+See the CHANGES file for details.
 
-Rajesh Vaidheeswarran
+Cons 2.1.1
+**********
+
+2.1.1 was the first separate development release of Cons.  It was
+based on Cons release 2.0 and contains the following notable changes:
+
+    --	Fixes for the -t option.
+
+    --	Support case-insensitive drive letters on WIN32 systems.
+
+    --	Better error messages for some cases.
+
+    --	Support for binary-file signatures on WIN32 systems.
+
+See the CHANGES file for details.
+
+General
+*******
+
+Thanks to Marconi Communications (formerly FORE Systems) management for
+having transferred the copyright to the Free Software Foundation and for
+previously having released `cons' under the GNU General Public License
+(GPL) so that everyone can benefit from it.
+
+Thanks to the Free Software Foundation for the infrastructure support for
+cons.
+
+And thanks to the members of the Cons community for the bug reports,
+patches, discussion, and continued interest.
+
+Steven Knight - Development Release Co-ordinator
+Rajesh Vaidheeswarran - Maintainer

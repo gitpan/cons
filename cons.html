@@ -13,7 +13,6 @@
 
 	<LI><A HREF="#name">NAME</A></LI>
 	<LI><A HREF="#description">DESCRIPTION</A></LI>
-	<LI><A HREF="#cons: a software construction system">Cons: A Software Construction System</A></LI>
 	<LI><A HREF="#introduction">Introduction</A></LI>
 	<LI><A HREF="#why cons why not make">Why Cons? Why not Make?</A></LI>
 	<UL>
@@ -105,6 +104,7 @@
 	<UL>
 
 		<LI><A HREF="#default construction variables">Default construction variables</A></LI>
+		<LI><A HREF="#interpolating construction variables">Interpolating construction variables</A></LI>
 	</UL>
 
 	<LI><A HREF="#default construction methods">Default construction methods</A></LI>
@@ -143,25 +143,21 @@
 
 	<LI><A HREF="#invoking cons">Invoking Cons</A></LI>
 	<LI><A HREF="#using and writing dependency scanners">Using and writing dependency scanners</A></LI>
-	<LI><A HREF="#support and suggestions">Support and Suggestions</A></LI>
+	<LI><A HREF="#support and suggestions">SUPPORT AND SUGGESTIONS</A></LI>
+	<LI><A HREF="#bugs">BUGS</A></LI>
+	<LI><A HREF="#information about cons">INFORMATION ABOUT CONS</A></LI>
+	<LI><A HREF="#authors">AUTHORS</A></LI>
 </UL>
 <!-- INDEX END -->
 
 <HR>
 <P>
 <H1><A NAME="name">NAME</A></H1>
-<P>Cons - Cons: A Software Construction System</P>
+<P>Cons - A Software Construction System</P>
 <P>
 <HR>
 <H1><A NAME="description">DESCRIPTION</A></H1>
-<P>The original document was automatically derived from the <EM>cons/cons.html</EM>
-by <STRONG>html2pod</STRONG>, thanks to Ulrich Pfiefer. Later revisions were created from
-the original.</P>
-<P>
-<HR>
-<H1><A NAME="cons: a software construction system">Cons: A Software Construction System</A></H1>
-<P>by Bob Sidebotham, et al. <EM><A HREF="mailto:cons-discuss@gnu.org">cons-discuss@gnu.org</A></EM></P>
-<P>A guide and reference for version 2.0.2</P>
+<P>A guide and reference for version 2.1.2</P>
 <P>Copyright (c) 1996-2000 Free Software Foundation, Inc.</P>
 <P>This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -420,6 +416,22 @@ top-level. Hybrid schemes are also possible. A separately maintained
 component that needs to be incorporated into a build tree, for example,
 might hook into the build tree in one place, but define its own construction
 hierarchy.</P>
+<P>By default, Cons does not change its working directory to the directory
+containing a subsidiary <EM>Conscript</EM> file it is including.  This behavior
+can be enabled for a build by specifying, in the top-level <EM>Construct</EM>
+file:</P>
+<PRE>
+        Conscript_chdir 1;</PRE>
+<P>When enabled, Cons will change to the subsidiary <EM>Conscript</EM> file's
+containing directory while reading in that file, and then change back
+to the top-level directory once the file has been processed.</P>
+<P>It is expected that this behavior will become the default in some future
+version of Cons.  To prepare for this transition, builds that expect
+Cons to remain at the top of the build while it reads in a subsidiary
+<EM>Conscript</EM> file are encouraged to explicitly disable this feature
+as follows:</P>
+<PRE>
+        Conscript_chdir 0;</PRE>
 <P>
 <H2><A NAME="relative, toprelative, and absolute file names">Relative, top-relative, and absolute file names</A></H2>
 <P>You may have noticed that the file names specified to the Build command are
@@ -1307,6 +1319,7 @@ are overridden in the default:</P>
   CC            =&gt; 'cl',
   CFLAGS        =&gt; '/nologo',
   CCCOM         =&gt; '%CC %CFLAGS %_IFLAGS /c %&lt; /Fo%&gt;',
+  CXXCOM        =&gt; '%CXX %CXXFLAGS %_IFLAGS /c %&lt; /Fo%&gt;',
   INCDIRPREFIX  =&gt; '/I',
   LINK          =&gt; 'link',
   LINKCOM       =&gt; '%LINK %LDFLAGS /out:%&gt; %&lt; %_LDIRS %LIBS',
@@ -1364,6 +1377,20 @@ command. For the utmost reproducibility, you should really arrange to set
 your own execution path, in your top-level <EM>Construct</EM> file (or perhaps by
 importing an appropriate construction package with the Perl <CODE>use</CODE>
 command). The default variables are intended to get you off the ground.</P>
+<P>
+<H2><A NAME="interpolating construction variables">Interpolating construction variables</A></H2>
+<P>Construction environment variables may be interpolated in the source and
+target file names by prefixing the construction variable name with <CODE>%</CODE>.</P>
+<PRE>
+  $env = new cons(
+        DESTDIR =&gt;      'programs',
+        SRCDIR  =&gt;      'src',
+  );
+  Program $env '%DESTDIR/hello', '%SRCDIR/hello.c';</PRE>
+<P>Expansion of construction variables is recursive--that is, the file
+<CODE>name(s)</CODE> will be re-expanded until no more substitutions can be made. If
+a construction variable is not defined in the environment, then the null
+string will be substituted.</P>
 <P>
 <HR>
 <H1><A NAME="default construction methods">Default construction methods</A></H1>
@@ -1471,7 +1498,8 @@ target.</P>
 environment may be introduced by prefixing the name of the construction
 variable with <CODE>%</CODE>. This is recursive: the command is expanded until no more
 substitutions can be made. If a construction variable is not defined in the
-environment, then the null string will be substituted.</P>
+environment, then the null string will be substituted.  A doubled <CODE>%%</CODE>
+will be replaced by a single <CODE>%</CODE> in the construction command.</P>
 <P>There are several pseudo variables which will also be expanded:</P>
 <DL>
 <DT><STRONG><A NAME="item_%>">%&gt;</A></STRONG><BR>
@@ -1619,43 +1647,52 @@ list of object filenames.</P>
 specified object files. It is invoked in the following manner:</P>
 <PRE>
   Program $env &lt;program name&gt;, &lt;source or object files&gt;;</PRE>
+<P>The program name will have the value of the <CODE>SUFEXE</CODE> construction
+variable appended (by default, <CODE>.exe</CODE> on Win32 systems, nothing on Unix
+systems) if the suffix is not already present.</P>
 <P>Source files may be specified in place of objects files--the <CODE>Objects</CODE>
 method will be invoked to arrange the conversion of all the files into
 object files, and hence all the observations about the <CODE>Objects</CODE> method,
-above, apply to this method also. The actual linking of the program will be
-handled by an external command which results from expanding the <CODE>LINKCOM</CODE>
-construction variable, with <A HREF="#item_%<"><CODE>%&lt;</CODE></A> set to the object files to be linked (in
-the order presented), and <A HREF="#item_%>"><CODE>%&gt;</CODE></A> set to the target (see the <CODE>Command</CODE> method
-for expansion details). The user may set additional variables in the
-construction environment, including <CODE>LINK</CODE>, to define which program to use
-for linking, <CODE>LIBPATH</CODE>, a colon-separated list of library search paths, for
-use with library specifications of the form <EM>-llib</EM>, and <CODE>LIBS</CODE>,
-specifying the list of libraries to link against (in either <EM>-llib</EM> form or
-just as pathnames. Relative pathnames in both <CODE>LIBPATH</CODE> and <CODE>LIBS</CODE> are
-interpreted relative to the directory in which the associated construction
-environment created (absolute and top-relative names may also be used). Cons
-automatically sets up dependencies on any libraries mentioned in <CODE>LIBS</CODE>:
-those libraries will be built before the command is linked.</P>
+above, apply to this method also.</P>
+<P>The actual linking of the program will be handled by an external command
+which results from expanding the <CODE>LINKCOM</CODE> construction variable, with
+<A HREF="#item_%<"><CODE>%&lt;</CODE></A> set to the object files to be linked (in the order presented),
+and <A HREF="#item_%>"><CODE>%&gt;</CODE></A> set to the target (see the <CODE>Command</CODE> method for expansion
+details). The user may set additional variables in the construction
+environment, including <CODE>LINK</CODE>, to define which program to use for
+linking, <CODE>LIBPATH</CODE>, a colon-separated list of library search paths,
+for use with library specifications of the form <EM>-llib</EM>, and <CODE>LIBS</CODE>,
+specifying the list of libraries to link against (in either <EM>-llib</EM>
+form or just as pathnames. Relative pathnames in both <CODE>LIBPATH</CODE> and
+<CODE>LIBS</CODE> are interpreted relative to the directory in which the associated
+construction environment is created (absolute and top-relative names may
+also be used). Cons automatically sets up dependencies on any libraries
+mentioned in <CODE>LIBS</CODE>: those libraries will be built before the command
+is linked.</P>
 <P>
 <H2><A NAME="the library method">The <CODE>Library</CODE> method</A></H2>
 <P>The <CODE>Library</CODE> method arranges to create the specified library from the
 specified object files. It is invoked as follows:</P>
 <PRE>
   Library $env &lt;library name&gt;, &lt;source or object files&gt;;</PRE>
+<P>The library name will have the value of the <CODE>SUFLIB</CODE> construction
+variable appended (by default, <CODE>.lib</CODE> on Win32 systems, <CODE>.a</CODE> on Unix
+systems) if the suffix is not already present.</P>
 <P>Source files may be specified in place of objects files--the <CODE>Objects</CODE>
 method will be invoked to arrange the conversion of all the files into
 object files, and hence all the observations about the <CODE>Objects</CODE> method,
-above, apply to this method also. The actual creation of the library will be
-handled by an external command which results from expanding the <CODE>ARCOM</CODE>
-construction variable, with <A HREF="#item_%<"><CODE>%&lt;</CODE></A> set to the library members (in the order
-presented), and <A HREF="#item_%>"><CODE>%&gt;</CODE></A> to the library to be created (see the <CODE>Command</CODE>
-method for expansion details). The user may set variables in the
-construction environment which will affect the operation of the
-command. These include <CODE>AR</CODE>, the archive program to use, <CODE>ARFLAGS</CODE>, which
-can be used to modify the flags given to the program specified by <CODE>AR</CODE>, and
-<CODE>RANLIB</CODE>, the name of a archive index generation program, if needed (if the
-particular need does not require the latter functionality, then <CODE>ARCOM</CODE>
-must be redefined to not reference <CODE>RANLIB</CODE>).</P>
+above, apply to this method also.</P>
+<P>The actual creation of the library will be handled by an external
+command which results from expanding the <CODE>ARCOM</CODE> construction variable,
+with <A HREF="#item_%<"><CODE>%&lt;</CODE></A> set to the library members (in the order presented),
+and <A HREF="#item_%>"><CODE>%&gt;</CODE></A> to the library to be created (see the <CODE>Command</CODE> method
+for expansion details). The user may set variables in the construction
+environment which will affect the operation of the command. These
+include <CODE>AR</CODE>, the archive program to use, <CODE>ARFLAGS</CODE>, which can be
+used to modify the flags given to the program specified by <CODE>AR</CODE>, and
+<CODE>RANLIB</CODE>, the name of a archive index generation program, if needed
+(if the particular need does not require the latter functionality,
+then <CODE>ARCOM</CODE> must be redefined to not reference <CODE>RANLIB</CODE>).</P>
 <P>The <CODE>Library</CODE> method allows the same library to be specified in multiple
 method invocations. All of the contributing objects from all the invocations
 (which may be from different directories) are combined and generated by a
@@ -2077,12 +2114,31 @@ can be attached to a source file by:</P>
     QuickScan $env \myscan, &quot;$_.smf&quot;;</PRE>
 <P>
 <HR>
-<H1><A NAME="support and suggestions">Support and Suggestions</A></H1>
+<H1><A NAME="support and suggestions">SUPPORT AND SUGGESTIONS</A></H1>
 <P>Cons is maintained by the user community.  To subscribe, send mail to
 <STRONG><A HREF="mailto:cons-discuss-request@gnu.org">cons-discuss-request@gnu.org</A></STRONG> with body <STRONG>subscribe</STRONG>.</P>
-<P>Please report any bugs/fixes/suggestions through the
-<A HREF="mailto:cons-discuss@gnu.org">cons-discuss@gnu.org</A> mailing list.</P>
-<P>The Official cons site is: <A HREF="http://www.dsmit.com/cons/">http://www.dsmit.com/cons/</A></P>
+<P>Please report any suggestions through the <STRONG><A HREF="mailto:cons-discuss@gnu.org">cons-discuss@gnu.org</A></STRONG> mailing
+list.</P>
+<P>
+<HR>
+<H1><A NAME="bugs">BUGS</A></H1>
+<P>Sure to be some. Please report any bugs through the <STRONG><A HREF="mailto:bug-cons@gnu.org">bug-cons@gnu.org</A></STRONG>
+mailing list.</P>
+<P>
+<HR>
+<H1><A NAME="information about cons">INFORMATION ABOUT CONS</A></H1>
+<P>Information about CONS can be obtained from the official cons web site
+<STRONG><A HREF="http://www.dsmit.com/cons/">http://www.dsmit.com/cons/</A></STRONG> or its mirrors listed there.</P>
+<P>The cons maintainers can be contacted by email at
+<STRONG><A HREF="mailto:cons-maintainers@gnu.org">cons-maintainers@gnu.org</A></STRONG></P>
+<P>
+<HR>
+<H1><A NAME="authors">AUTHORS</A></H1>
+<P>Originally by Bob Sidebotham. Then significantly enriched by the members
+of the Cons community <STRONG><A HREF="mailto:cons-discuss@gnu.org">cons-discuss@gnu.org</A></STRONG>.</P>
+<P>The Cons community would like to thank Ulrich Pfeifer for the original pod
+documentation derived from the <EM>cons.html</EM> file. Cons documentation is now
+a part of the program itself.</P>
 
 </BODY>
 

@@ -1,11 +1,26 @@
 #!/usr/bin/env perl
 
-# $Id: cons.pl,v 1.69 2000/06/14 22:33:01 rv Exp $
+# NOTE:  Cons intentionally does not use the "perl -w" option or
+# "use strict."  Because Cons "configuration files" are actually
+# Perl scripts, enabling those restrictions here would force them
+# on every user's config files, wanted or not.  Would users write
+# "better" Construct and Conscript files if we forced "use strict"
+# on them?  Probably.  But we want people to use Cons to get work
+# done, not force everyone to become a Perl guru to use it, so we
+# don't insist.
+#
+# That said, Cons' code is both "perl -w" and "use strict" clean.
+# Regression tests keep the code honest by checking for warnings
+# and "use strict" failures.
 
-$ver_num = 2.0;
+# $Id: cons.pl,v 1.103 2000/09/10 04:59:21 knight Exp $
+
+use vars qw( $ver_num $ver_rev $version );
+
+$ver_num = "2.1";
 $ver_rev = ".2";
-$version = sprintf "This is Cons %2.1f%s " .
-	    '($Id: cons.pl,v 1.69 2000/06/14 22:33:01 rv Exp $)'. "\n",
+$version = sprintf "This is Cons %s%s " .
+	    '($Id: cons.pl,v 1.103 2000/09/10 04:59:21 knight Exp $)'. "\n",
 	    $ver_num, $ver_rev;
 
 # Cons: A Software Construction Tool.
@@ -27,28 +42,49 @@ $version = sprintf "This is Cons %2.1f%s " .
 # Boston, MA 02111-1307, USA.
 
 require 5.002;
+# See the NOTE above about why Cons doesn't "use strict".
 use integer;
 use Cwd;
 use File::Copy;
-use File::Spec;
+
+use vars qw( $_WIN32 $_a $_exe $_o $_so );
 
 #------------------------------------------------------------------
 # Determine if running on win32 platform - either Windows NT or 95
 #------------------------------------------------------------------
 
+use vars qw( $PATH_SEPARATOR $iswin32 $_WIN32 $usage $indent @targets );
+
 BEGIN {
-    $PATH_SEPARATOR = ':';
+    use Config;
+
     # if the version is 5.003, we can check $^O
     if ($] <  5.003) {
 	eval("require Win32");
-	$iswin32 = (!$@);
+	$_WIN32 = (!$@);
     } else {
-	$iswin32 = ($^O eq "MSWin32") ? 1 : 0;
+	$_WIN32 = ($^O eq "MSWin32") ? 1 : 0;
     }
-    if ($iswin32) {
-	$_WIN32 = 1;
-	$PATH_SEPARATOR = ';';
-    }
+
+    # Fetch the PATH separator from Config;
+    # provide our old defaults in case it's not set.
+    $PATH_SEPARATOR = $Config{path_sep};
+    $PATH_SEPARATOR = $_WIN32 ? ';' : ':' if ! defined $PATH_SEPARATOR;
+
+    # Fetch file suffixes from Config,
+    # accomodating differences in the Config variables
+    # used by different Perl versions.
+    $_exe = $Config{_exe};
+    $_exe = $Config{exe_ext} if ! defined $_exe;
+    $_exe = $_WIN32 ? '.exe' : '' if ! defined $_exe;
+    $_o = $Config{_o};
+    $_o = $Config{obj_ext}  if ! defined $_o;
+    $_o = $_WIN32 ? '.obj' : '.o' if ! defined $_o;
+    $_a = $Config{_a};
+    $_a = $Config{lib_ext} if ! defined $_a;
+    $_a = $_WIN32 ? '.lib' : '.a' if ! defined $_a;
+    $_so = ".$Config{so}";
+    $_so = $_WIN32 ? '.dll' : '.so' if ! defined $_so;
 }
 
 # Flush stdout each time.
@@ -123,19 +159,31 @@ Arguments can be any of the following, in any order:
 
   -x		Show this message and exit.
 
-   Please report any bugs/fixes/suggestions through the
-   cons-discuss@gnu.org mailing list. To subscribe, send mail to
-   cons-discuss-request@gnu.org with body 'subscribe'.
+
+   Please report any suggestions through the cons-discuss@gnu.org mailing
+   list.
+
+   To subscribe, send mail to cons-discuss-request@gnu.org with body
+   'subscribe'.
+
+   If you find a bug, please report it through the bug-cons@gnu.org
+   mailing list.
+
+   Information about CONS can be obtained from the official cons web site
+   http://www.dsmit.com/cons/ or its mirrors (listed there).
+
+   The cons maintainers can be contacted by email at cons-maintainers@gnu.org
 
    User documentation of cons is contained in cons and can be obtained
    by doing 'perldoc /path/to/cons'.
 
-   The Official cons site is: http://www.dsmit.com/cons/
 );
 
 # Simplify program name, if it is a path.
-($vol, $dir, $file) = File::Spec->splitpath($0);
-$0 = $file;
+{
+    my ($vol, $dir, $file) = File::Spec->splitpath($0);
+    $0 = $file;
+}
 
 # Default parameters.
 $param::topfile = 'Construct';	# Top-level construction file.
@@ -147,6 +195,7 @@ $param::depfile = '';		# Write all deps out to this file
 $param::salt = '';		# Salt derived file signatures with this.
 $param::rep_sig_times_ok = 1;	# Repository .consign times are in sync
 				#   w/files.
+$param::conscript_chdir = 0;	# Change dir to Conscript directory
 $param::quiet = 0;		# should we show the command being executed.
 
 #
@@ -159,30 +208,14 @@ sub showcom {
 }
 
 # Default environment.
+# This contains only the completely platform-independent information
+# we can figure out.  Platform-specific information (UNIX, Win32)
+# gets added below.
 @param::defaults = (
-     'CC'	    => 'cc',
-     'CFLAGS'	    => '',
-     'CCCOM'	    => '%CC %CFLAGS %_IFLAGS -c %< -o %>',
-     'CXX'          => '%CC',
-     'CXXFLAGS'     => '%CFLAGS',
-     'CXXCOM'       => '%CXX %CXXFLAGS %_IFLAGS -c %< -o %>',
-     'INCDIRPREFIX' => '-I',
-     'LINK'	    => '%CXX',
-     'LINKCOM'	    => '%LINK %LDFLAGS -o %> %< %_LDIRS %LIBS',
-     'LINKMODULECOM'=> '%LD -r -o %> %<',
-     'LIBDIRPREFIX' => '-L',
-     'AR'	    => 'ar',
-     'ARFLAGS'	    => 'r', # rs?
-     'ARCOM'	    => "%AR %ARFLAGS %> %<\n%RANLIB %>",
-     'RANLIB'	    => 'ranlib',
-     'AS'	    => 'as',
-     'ASFLAGS'	    => '',
-     'ASCOM'	    => '%AS %ASFLAGS %< -o %>',
-     'LD'	    => 'ld',
-     'LDFLAGS'	    => '',
-     'PREFLIB'      => 'lib',
-     'SUFLIB'	    => '.a',
-     'SUFLIBS'      => '.so:.a',
+     'SUFEXE'	    => $_exe,				# '' on UNIX systems
+     'SUFLIB'	    => $_a,				# '.a' on UNIX systems
+     'SUFLIBS'      => "$_so:$_a",			# '.so:.a' on UNIX
+     'SUFOBJ'	    => $_o,				# '.o' on UNIX systems
      'SUFMAP'       => {
 	 '.c'  => 'build::command::cc',
 	 '.s'  => 'build::command::cc',
@@ -194,12 +227,10 @@ sub showcom {
 	 '.c++'=> 'build::command::cxx',
 	 '.C++'=> 'build::command::cxx',
      },
-     'SUFOBJ'	    => '.o',
-     'ENV'	    => { 'PATH' => '/bin:/usr/bin' },
 );
 
-# overrides for Win32
-if ($main::_WIN32) {
+if ($_WIN32) {
+    # Defaults for Win32.
     # Defined for VC++ 6.0 by Greg Spencer <greg_spencer@acm.org>.
     # Your mileage may vary.
     my @win = (
@@ -208,7 +239,7 @@ if ($main::_WIN32) {
 	'CCCOM'          => '%CC %CFLAGS %_IFLAGS /c %< /Fo%>',
 	'CXX'            => '%CC',
 	'CXXFLAGS'       => '%CFLAGS',
-	'CXXCOM'         => '%CXX %CXXFLAGS %_IFLAGS -c %< /Fo%>',
+	'CXXCOM'         => '%CXX %CXXFLAGS %_IFLAGS /c %< /Fo%>',
 	'INCDIRPREFIX'   => '/I',
 	'LINK'           => 'link',
 	'LINKCOM'        => '%LINK %LDFLAGS /out:%> %< %_LDIRS %LIBS',
@@ -221,12 +252,36 @@ if ($main::_WIN32) {
 	'LD'             => 'link',
 	'LDFLAGS'        => '/nologo ',
 	'PREFLIB'        => '',
-	'SUFEXE'         => '.exe',
-	'SUFLIB'         => '.lib',
-	'SUFLIBS'        => '.dll:.lib',
-	'SUFOBJ'         => '.obj',
     );
     push(@param::defaults, @win);
+} else {
+    # Defaults for a typical (?) UNIX platform.
+    # Your mileage may vary.
+    my @unix = (
+	'CC'             => 'cc',
+	'CFLAGS'         => '',
+	'CCCOM'          => '%CC %CFLAGS %_IFLAGS -c %< -o %>',
+	'CXX'            => '%CC',
+	'CXXFLAGS'       => '%CFLAGS',
+	'CXXCOM'         => '%CXX %CXXFLAGS %_IFLAGS -c %< -o %>',
+	'INCDIRPREFIX'   => '-I',
+	'LINK'           => '%CXX',
+	'LINKCOM'        => '%LINK %LDFLAGS -o %> %< %_LDIRS %LIBS',
+	'LINKMODULECOM'  => '%LD -r -o %> %<',
+	'LIBDIRPREFIX'   => '-L',
+	'AR'             => 'ar',
+	'ARFLAGS'        => 'r', # rs?
+	'ARCOM'          => "%AR %ARFLAGS %> %<\n%RANLIB %>",
+	'RANLIB'         => 'ranlib',
+	'AS'             => 'as',
+	'ASFLAGS'        => '',
+	'ASCOM'          => '%AS %ASFLAGS %< -o %>',
+	'LD'             => 'ld',
+	'LDFLAGS'        => '',
+	'PREFLIB'        => 'lib',
+	'ENV'            => { 'PATH' => '/bin:/usr/bin' },
+    );
+    push(@param::defaults, @unix);
 }
 
 # Handle command line arguments.
@@ -337,25 +392,30 @@ if ($param::depfile) {
 
 # If the supplied top-level Conscript file is not in the
 # current directory, then change to that directory.
-($vol, $dir, $file) = File::Spec->splitpath($param::topfile);
-if ($vol || $dir) {
-    my($cd) = File::Spec->catpath($vol, $dir, undef);
-    chdir($cd) || die("$0: couldn't change to directory $cd ($!)\n");
-    $param::topfile = $file;
+{
+    my ($vol, $dir, $file) = File::Spec->splitpath($param::topfile);
+    if ($vol || $dir) {
+	my($cd) = File::Spec->catpath($vol, $dir, undef);
+	chdir($cd) || die("$0: couldn't change to directory $cd ($!)\n");
+	$param::topfile = $file;
+    }
 }
 
 # Walk up the directory hierarchy looking for a Conscript file (if -t set).
 my $target_top;
 if ($param::traverse) {
     my $cwd = cwd();
-    $target_top = dir::lookupdir(undef, $cwd);
-    my $dir = $target_top;
+    my $ttop = dir::lookupdir(undef, $cwd);
+    my $dir = $ttop;
     while (! -f $dir->prefix . $param::topfile) {
 	$dir = $dir->up;
 	die("$0: unable to find $param::topfile.\n") if ! $dir;
     }
-    chdir($dir->path);
-    @targets = map($target_top->lookup($_)->path, @targets);
+    if ($dir != $ttop) {
+	chdir($dir->path);
+	@targets = map($ttop->lookup($_)->path, @targets);
+	$target_top = $ttop;
+    }
 }
 
 # Set up $dir::top and $dir::cwd, now that we are in the right directory.
@@ -383,7 +443,11 @@ sub Override {
 }
 
 package main;
+
+use vars qw( %priority $errors );
+
 # Check script inclusion regexps
+my $re;
 for $re (@param::include) {
     if (! defined eval {"" =~ /$re/}) {
 	my($err) = $@;
@@ -406,6 +470,7 @@ doscripts($param::topfile);
 $errors = 0;
 
 # Build the supplied target patterns.
+my $tgt;
 for $tgt (map($dir::top->lookup($_), @targets)) {
     if ($target_top && ! $tgt->is_under($target_top)) {
 	# A -t option was used, and this target is not underneath
@@ -463,14 +528,9 @@ sub buildtarget {
 	    my($members) = $tgt->{member};
 	    my $entry;
 	    for $entry (sort keys %$members) {
-		# XXX
-		# This manipulation is still operating-system specific,
-		# but there's no File::Spec method for hidden files,
-		# so leave it alone until we know what cross-OS
-		# conventions make sense.
-		next if $entry =~ /^\./; # ignore hidden files
+		next if $entry eq $dir::CURDIR || $entry eq $dir::UPDIR;
 		my($tgt) = $members->{$entry};
-		next if ref($tgt) eq "file" && !exists($tgt->{builder});
+		next if ref($tgt) ne "dir" && !exists($tgt->{builder});
 		my($stat) = buildtarget($members->{$entry});
 		my($pri) = $priority{$stat};
 		if ($pri > $priority) {
@@ -520,9 +580,11 @@ sub buildtarget {
 }
 
 # Support for "building" scripts, importing and exporting variables.
-# With the expection of the top-level routine here (invoked from the
+# With the exception of the top-level routine here (invoked from the
 # main package by cons), these are all invoked by user scripts.
 package script;
+
+use vars qw( $ARG $caller_dir_path );
 
 # This is called from main to interpret/run the top-level Construct
 # file, passed in as the single argument.
@@ -532,12 +594,29 @@ sub main::doscripts {
     # Now set up the includes/excludes (after the Construct file is read).
     $param::include = join('|', @param::include);
 
+    $caller_dir_path = undef;
+    my $cwd = Cwd::cwd();
     my(@scripts) = pop(@priv::scripts);
     while ($priv::self = shift(@scripts)) {
 	my($path) = $priv::self->{script}->rsrcpath;
-	$dir::cwd = $priv::self->{script}->{dir};
 	if (-f $path) {
-	    do $path;
+	    $dir::cwd = $priv::self->{script}->{dir};
+	    my ($vol, $dir, $file);
+	    if ($param::conscript_chdir) {
+		($vol, $dir, $file) = File::Spec->splitpath($path);
+		if ($vol ne '' || $dir ne '') {
+		    $caller_dir_path = File::Spec->catpath($vol, $dir, undef);
+		    chdir($caller_dir_path) ||
+			die "Could not chdir to $caller_dir_path: $!\n";
+		}
+	    } else {
+		$file = $path;
+	    }
+	    do $file;
+	    if ($caller_dir_path) {
+		chdir($cwd);
+		$caller_dir_path = undef;
+	    }
 	    if ($@) {
 		chomp($@);
 		my $err = ($@ =~ /\n/ms) ? ":\n$@" : " ($@)";
@@ -549,13 +628,19 @@ sub main::doscripts {
 	    }
 	    undef @priv::scripts;
 	} else {
-	    warn qq(Ignoring missing script "$path".\n);
+	    my $where = '';
+	    my $cref = $priv::self->{script}->creator;
+	    if (defined $cref) {
+		my($_foo, $script, $line, $sub) = @$cref;
+		$where = " ($sub in $script, line $line)";
+	    }
+	    warn qq(Ignoring missing script "$path"$where);
 	}
 
 # reset "a-zA-Z";# Reset here, to give Construct chance at globals (i.e. %ARG).
 # RESET causes a memory corruption problem, with all sorts of bad side effects
 # so we've replaced it with the following code.
-	my($key,$val);
+	my ($key, $val);
 	while (($key,$val) = each %script::) {
 	    local(*priv::script) = $val;
 	    undef $priv::script;
@@ -576,8 +661,12 @@ sub caller_info {
     my(@frame);
     do {
 	@frame = caller ++$lev;
-	if ($frame[3] eq '(eval)') {
-	    return caller --$lev;
+	if (defined($frame[3]) && $frame[3] eq '(eval)') {
+	    @frame = caller --$lev;
+	    if ($caller_dir_path) {
+		$frame[1] = File::Spec->catfile($caller_dir_path, $frame[1]);
+	    }
+	    return @frame;
 	}
     } while ($frame[3]);
     return;
@@ -597,6 +686,7 @@ sub Link {
 # the same regardless of symbolic links.
 sub Repository {
     my($my_dir) = Cwd::cwd();
+    my $dir;
     foreach $dir (@_) {
 	my($d) = `$^X -e "use Cwd; chdir('$dir') && print cwd"`;
 	next if ! $d || ! -d $d || $d eq $my_dir;
@@ -616,6 +706,12 @@ sub Repository_List {
 # in fact, consistent with the times on the files themselves.
 sub Repository_Sig_Times_OK {
     $param::rep_sig_times_ok = shift;
+}
+
+# Specify whether we should chdir to the containing directories
+# of Conscript files.
+sub Conscript_chdir {
+    $param::conscript_chdir = shift;
 }
 
 # Specify files/targets that must be present and built locally,
@@ -659,6 +755,7 @@ sub Build {
     my(@files) = map($dir::cwd->lookupfile($_), @_);
     my(%imports);
     map($imports{$_} = ${"script::$_"}, @{$priv::self->{exports}});
+    my $file;
     for $file (@files) {
 	next if $param::include && $file->path !~ /$param::include/o;
 	my($self) = {'script' => $file,
@@ -707,7 +804,7 @@ sub DirPath {
 # The usual path separator problems abound; for now we'll use :
 sub SplitPath {
     my($dirs) = @_;
-    if (ref($dirs) ne ARRAY) {
+    if (ref($dirs) ne "ARRAY") {
 	$dirs = [ split(/$main::PATH_SEPARATOR/o, $dirs) ];
     }
     map { DirPath($_) } @$dirs;
@@ -790,6 +887,8 @@ sub Precious {
 # object. Procs beginning with _ are intended for internal use.
 package cons;
 
+use vars qw( %envcache );
+
 # This is passed the name of the base environment to instantiate.
 # Overrides to the base environment may also be passed in
 # as key/value pairs.
@@ -826,6 +925,7 @@ sub _resolve {
     return $_[0] if !$param::overrides;
     my($env, $tgt) = @_;
     my($path) = $tgt->path;
+    my $re;
     for $re (@param::overrides) {
 	next if $path !~ /$re/;
 	# Found one. Return a combination of the original environment
@@ -844,11 +944,22 @@ sub _resolve {
 # Internal function/method.
 sub _subst {
     my($env, $str) = @_;
-    if (ref($str) eq ARRAY) {
+    if (! defined $str) {
+	return undef;
+    } elsif (ref($str) eq "ARRAY") {
 	return [ map($env->_subst($_), @$str) ];
     } else {
-	while (($str =~ s/\%\{([_a-zA-Z]\w*)\}/$env->{$1}/ge) ||
-	       ($str =~ s/\%([_a-zA-Z]\w*)/$env->{$1}/ge)) {}
+	# % expansion.  %% gets converted to % later, so expand any
+	# %keyword construction that doesn't have a % in front of it,
+	# modulo multiple %% pairs in between.
+	# In Perl 5.005 and later, we could actually do this in one regex
+	# using a conditional expression as follows,
+	#	while ($str =~ s/($pre)\%(\{)?([_a-zA-Z]\w*)(?(2)\})/"$1".$env->{$3}/ge) {}
+	# The following two-step approach is backwards-compatible
+	# to (at least) Perl5.003.
+	my $pre = '^|[^\%](?:\%\%)*';
+	while (($str =~ s/($pre)\%([_a-zA-Z]\w*)/$1.($env->{$2}||'')/ge) ||
+	       ($str =~ s/($pre)\%\{([_a-zA-Z]\w*)\}/$1.($env->{$2}||'')/ge)) {}
 	return $str;
     }
 }
@@ -856,7 +967,8 @@ sub _subst {
 sub Install {
     my($env) = shift;
     my($tgtdir) = $dir::cwd->lookupdir($env->_subst(shift));
-    for $file (map($dir::cwd->lookupfile($_), @_)) {
+    my $file;
+    for $file (map($dir::cwd->lookupfile($env->_subst($_)), @_)) {
 	my($tgt) = $tgtdir->lookupfile($file->{entry});
 	$tgt->bind(find build::install, $file);
     }
@@ -889,7 +1001,7 @@ sub InstallAs {
     } else {
 	foreach (0..$#sources) {
 	    my $tfile = $dir::cwd->lookupfile($env->_subst($targets[$_]));
-	    my $sfile = $dir::cwd->lookupfile($sources[$_]);
+	    my $sfile = $dir::cwd->lookupfile($env->_subst($sources[$_]));
 	    $tfile->bind(find build::install, $sfile);
 	}
     }
@@ -902,8 +1014,9 @@ sub InstallAs {
 #	Local "$dir/$file";
 sub Install_Local {
     my($env) = shift;
-    my($tgtdir) = $dir::cwd->lookupdir(shift);
-    for $file (map($dir::cwd->lookupfile($_), @_)) {
+    my($tgtdir) = $dir::cwd->lookupdir($env->_subst(shift));
+    my $file;
+    for $file (map($dir::cwd->lookupfile($env->_subst($_)), @_)) {
 	my($tgt) = $tgtdir->lookupfile($file->{entry});
 	$tgt->bind(find build::install, $file);
 	$tgt->local(1);
@@ -912,7 +1025,8 @@ sub Install_Local {
 
 sub Objects {
     my($env) = shift;
-    map($_->relpath($dir::cwd), _Objects($env, map($dir::cwd->lookupfile($_), @_)))
+    map($_->relpath($dir::cwd),
+	_Objects($env, map($dir::cwd->lookupfile($env->_subst($_)), @_)))
 }
 
 # Called with multiple source file references (or object files).
@@ -946,7 +1060,8 @@ sub _Object {
 
 sub Program {
     my($env) = shift;
-    my($tgt) = $dir::cwd->lookupfile($env->_subst(shift));
+    my($tgt) = $dir::cwd->lookupfile(file::addsuffix($env->_subst(shift),
+						 $env->{SUFEXE}));
     my($progenv) = $env->_resolve($tgt);
     $tgt->bind(find build::command::link($progenv, $progenv->{LINKCOM}),
 	       $env->_Objects(map($dir::cwd->lookupfile($env->_subst($_)), @_)));
@@ -1008,8 +1123,8 @@ sub Command {
 
 sub Depends {
     my($env) = shift;
-    my($tgt) = $dir::cwd->lookup(shift);
-    push(@{$tgt->{dep}}, map($dir::cwd->lookup($_), @_));
+    my($tgt) = $dir::cwd->lookup($env->_subst(shift));
+    push(@{$tgt->{dep}}, map($dir::cwd->lookup($env->_subst($_)), @_));
 }
 
 # Setup a quick scanner for the specified input file, for the
@@ -1019,7 +1134,7 @@ sub Depends {
 # dependencies.
 sub QuickScan {
     my($env, $code, $file, $path) = @_;
-    $dir::cwd->lookup($file)->{'srcscan',$env} =
+    $dir::cwd->lookup($env->_subst($file))->{'srcscan',$env} =
 	find scan::quickscan($code, $env, $env->_subst($path));
 }
 
@@ -1040,6 +1155,9 @@ sub compatible { 0 }
 
 # Builder module for the Install command.
 package build::install;
+
+use vars qw( @ISA $installer );
+
 BEGIN {
     @ISA = qw(build);
     bless $installer = {}    # handle for this class.
@@ -1068,6 +1186,9 @@ sub action {
 
 # Builder module for generic UNIX commands.
 package build::command;
+
+use vars qw( @ISA %com );
+
 BEGIN { @ISA = qw(build) }
 
 sub find {
@@ -1156,6 +1277,7 @@ sub _variant {
 sub getcoms {
     my($self, $tgt) = @_;
     my(@coms);
+    my $com;
     for $com (split(/\n/, $self->{com})) {
 	my(@src) = (undef, @{$tgt->{sources}});
 	my(@src1) = @src;
@@ -1198,11 +1320,14 @@ sub getcoms {
 
 	# Deal with %[ %].
 	$com =~ s{%\[(.*?)%\]}{
-	    my($func, @args) = split(/\s/, $1);
+	    my($func, @args) = grep { $_ ne '' } split(/\s+/, $1);
 	    die("$0: \"$func\" is not defined.\n")
 		unless ($self->{env}->{$func});
 	    &{$self->{env}->{$func}}(@args);
 	}gex;
+
+	# Convert left-over %% into %.
+	$com =~ s/%%/%/g;
 
 	# White space cleanup. XXX NO WAY FOR USER TO HAVE QUOTED SPACES
 	$com = join(' ', split(' ', $com));
@@ -1227,6 +1352,7 @@ sub action {
     %ENV = %{$env->{ENV}};
 
     # Handle multi-line commands.
+    my $com;
     for $com ($self->getcoms($tgt)) {
 	if ($com !~ s/^\@\s*//) {
 	    main::showcom($com);
@@ -1236,22 +1362,31 @@ sub action {
 	  #---------------------
 	  # Can't fork on Win32
 	  #---------------------
-
 	  if ($main::_WIN32) {
 	    system($com);
+	    if ($?) {
+	      my ($b0, $b1) = ($? & 0xFF, $? >> 8);
+	      my $err = $b1 || $?;
+	      my $path = $tgt->path;
+	      my $warn = qq($0: *** [$path] Error $err);
+	      $warn .= " (executable not found in path?)" if $b1 == 0xFF;
+	      warn "$warn\n";
+	      return undef;
+	    }
 	  } else {
 	    my($pid) = fork();
 	    die("$0: unable to fork child process ($!)\n") if !defined $pid;
 	    if (!$pid) {
-	      # This is the child.
-	      exec($com);
+	      # This is the child.  We eval the command to suppress -w
+	      # warnings about not reaching the statements afterwards.
+	      eval 'exec($com)';
 	      $com =~ s/\s.*//;
 	      die qq($0: failed to execute "$com" ($!). )
 		. qq(Is this an executable on path "$ENV{PATH}"?\n);
 	    }
 	    for (;;) {
 	      do {} until wait() == $pid;
-	      my($b0, $b1 ) = ($? & 0xFF, $? >> 8);
+	      my ($b0, $b1) = ($? & 0xFF, $? >> 8);
 	      # Don't actually see 0177 on stopped process; is this necessary?
 	      next if $b0 == 0177; # process stopped; we can wait.
 	      if ($b0) {
@@ -1273,15 +1408,6 @@ sub action {
 	    }
 	  }
 	}
-
-	if ($main::_WIN32) {
-	  my($err) = $?;
-	  if ($err) {
-	    my($path) = $tgt->path;
-	    warn qq($0: *** [$path] Error $err\n); # trying to be like make.
-	    return undef;
-	  }
-	}
     }
 
     # success.
@@ -1296,6 +1422,9 @@ sub script {
 
 # Create a linked module.
 package build::command::link;
+
+use vars qw( @ISA );
+
 BEGIN { @ISA = qw(build::command) }
 
 # Find an appropriate linker.
@@ -1305,9 +1434,12 @@ sub find {
 	my($ldirs) = '';
 	my($wd) = $env->{_cwd};
 	my($pdirs) = $env->{LIBPATH};
-	if (ref($pdirs) ne 'ARRAY') {
+	if (! defined $pdirs) {
+	    $pdirs = [ ];
+	} elsif (ref($pdirs) ne 'ARRAY') {
 	    $pdirs = [ split(/$main::PATH_SEPARATOR/o, $pdirs) ];
 	}
+	my $dir;
 	for $dir (map($wd->lookupdir($env->_subst($_)), @$pdirs)) {
 	    my($dpath) = $dir->path;
 	    $ldirs .= " ".$env->{LIBDIRPREFIX}.$dpath;
@@ -1334,6 +1466,7 @@ sub find {
 
     if ($main::_WIN32 && !exists $env->{_LIBS}) {
 	my($libs);
+	my $name;
 	for $name (split(' ', $env->_subst($env->{LIBS}))) {
 	    if ($name =~ /^-l(.*)/) {
 		$name = "$env->{PREFLIB}$1$env->{SUFLIB}";
@@ -1353,11 +1486,13 @@ sub includes {
     my($self, $tgt) = @_;
     my($env) = $self->{env};
     my($ewd) = $env->{_cwd};
-    my($ldirs) = $env->{LIBPATH};
-    if (ref($ldirs) ne 'ARRAY') {
+    my $ldirs = $env->{LIBPATH};
+    if (! defined $ldirs) {
+	$ldirs = [ ];
+    } elsif (ref($ldirs) ne 'ARRAY') {
 	$ldirs = [ split(/$main::PATH_SEPARATOR/o, $ldirs) ];
     }
-    my(@lpath) = map($ewd->lookupdir($_), @$ldirs);
+    my @lpath = map($ewd->lookupdir($_), @$ldirs);
     my(@sigs);
     my(@names);
 
@@ -1366,10 +1501,11 @@ sub includes {
 	# <schwarze@isa.de> 1998-06-18
 	@names = split(' ', $env->_subst($env->{LIBS}));
     } else {
-	@names = split(' ', $env->{LIBS});
+	@names = split(' ', $env->{LIBS} || '');
     }
+    my $name;
     for $name (@names) {
-	my($lpath,@allnames);
+	my ($lpath, @allnames);
 	if ($name =~ /^-l(.*)/) {
 	    # -l style names are looked up on LIBPATH, using all
 	    # possible lib suffixes in the same search order the
@@ -1391,7 +1527,9 @@ sub includes {
 		$lpath = [$dir::top];
 	    }
 	}
+	my $dir;
 	DIR: for $dir (@$lpath) {
+	    my $n;
 	    for $n (@allnames) {
 		my($lib) = $dir->lookup_accessible($n);
 		if ($lib) {
@@ -1419,6 +1557,8 @@ sub compatible {
 # Link a program.
 package build::command::linkedmodule;
 
+use vars qw( @ISA );
+
 BEGIN { @ISA = qw(build::command) }
 
 # Always compatible with other such builders, so the user
@@ -1430,6 +1570,8 @@ sub compatible {
 
 # Builder for a C module
 package build::command::cc;
+
+use vars qw( @ISA );
 
 BEGIN { @ISA = qw(build::command) }
 
@@ -1453,6 +1595,8 @@ sub includes {
 
 # Builder for a C++ module
 package build::command::cxx;
+
+use vars qw( @ISA );
 
 BEGIN { @ISA = qw(build::command) }
 
@@ -1480,6 +1624,8 @@ sub includes {
 # line).
 package build::command::user;
 
+use vars qw( @ISA );
+
 BEGIN { @ISA = qw(build::command) }
 
 # XXX Optimize this to not use ignored paths.
@@ -1487,6 +1633,8 @@ sub comsig {
     return $_[0]->{_comsig} if exists $_[0]->{_comsig};
     my($self, $tgt) = @_;
     my($env) = $self->{env};
+    $self->{_comsig} = '';
+    my $com;
   com:
     for $com (split(/[\n;]/, $self->script)) {
 	# Isolate command word.
@@ -1494,9 +1642,12 @@ sub comsig {
 	$com =~ s/\s.*//;
 	next if !$com; # blank line
 	my($pdirs) = $env->{ENV}->{PATH};
-	if (ref($pdirs) ne 'ARRAY') {
+	if (! defined $pdirs) {
+	    $pdirs = [ ];
+	} elsif (ref($pdirs) ne 'ARRAY') {
 	    $pdirs = [ split(/$main::PATH_SEPARATOR/o, $pdirs) ];
 	}
+	my $dir;
 	for $dir (map($dir::top->lookupdir($_), @$pdirs)) {
 	    my($prog) = $dir->lookup_accessible($com);
 	    if ($prog) { # XXX Not checking execute permission.
@@ -1519,6 +1670,7 @@ sub includes {
     my($sig) = '';
 
     # Check for any quick scanners attached to source files.
+    my $dep;
     for $dep (@{$tgt->{dep}}, @{$tgt->{sources}}) {
 	my($scanner) = $dep->{'srcscan',$self->{env}};
 	if ($scanner) {
@@ -1535,6 +1687,8 @@ sub includes {
 # We assume that a user command might be built and implement the
 # appropriate dependencies on the command itself.
 package build::command::library;
+
+use vars qw( @ISA );
 
 BEGIN { @ISA = qw(build::command) }
 
@@ -1591,6 +1745,7 @@ sub action {
 
     # Make sure all targets in the group are unlinked before building any.
     my($tgts) = $self->{tgts};
+    my $tgt;
     for $tgt (@$tgts) {
 	futil::mkdir($tgt->{dir});
 	unlink($tgt->path) if ! $tgt->precious;
@@ -1658,10 +1813,13 @@ sub includes {
 # file. Only used for commands run by the Command method.
 package scan::quickscan;
 
+use vars qw( @ISA %scanner );
+
 BEGIN { @ISA = qw(scan) }
 
 sub find {
     my($class, $code, $env, $path) = @_;
+    $path = '' if ! defined $path;
     $scanner{$code,$env,$path} || do {
 	my(@path) = map { $dir::cwd->lookupdir($_) } split(/:/, $path);
 	my($self) = { code => $code, env => $env, path => \@path };
@@ -1682,7 +1840,9 @@ sub scan {
     close(SCAN);
     my($wd) = $file->{dir};
     my(@files);
+    my $name;
     for $name (@includes) {
+	my $dir;
 	for $dir ($file->{dir}, @{$self->{path}}) {
 	    my($include) = $dir->lookup_accessible($name);
 	    if ($include) {
@@ -1698,6 +1858,8 @@ sub scan {
 # CPP (C preprocessor) scanning module
 package scan::cpp;
 
+use vars qw( @ISA %scanner );
+
 BEGIN { @ISA = qw(scan) }
 
 # For this constructor, provide the include path argument (colon
@@ -1710,10 +1872,12 @@ BEGIN { @ISA = qw(scan) }
 # for the same path: otherwise we will unecessarily scan files.
 sub find {
     my($class, $dir, $pdirs) = @_;
-    if (ref($pdirs) ne 'ARRAY') {
+    if (! defined $pdirs) {
+	$pdirs = [ ];
+    } elsif (ref($pdirs) ne 'ARRAY') {
 	$pdirs = [ split(/$main::PATH_SEPARATOR/o, $pdirs) ];
     }
-    my(@path) = map($dir->lookupdir($_), @$pdirs);
+    my @path = map($dir->lookupdir($_), @$pdirs);
     my($spath) = "@path";
     $scanner{$spath} || do {
 	my($self) = {'path' => \@path};
@@ -1753,7 +1917,9 @@ sub scan {
 
     my(@includes);
 
+    my $name;
     for $name (@$angles) {
+	my $dir;
 	for $dir (@shortpath) {
 	    my($include) = $dir->lookup_accessible($name);
 	    if ($include) {
@@ -1764,6 +1930,7 @@ sub scan {
     }
 
     for $name (@$quotes) {
+	my $dir;
 	for $dir(@longpath) {
 	    my($include) = $dir->lookup_accessible($name);
 	    if ($include) {
@@ -1779,7 +1946,7 @@ sub scan {
 # Return the include flags that would be used for a C Compile.
 sub iflags {
     my($self, $env) = @_;
-    my($iflags);
+    my($iflags) = '';
     my($dpath);
     for $dpath (map($_->path, @{$self->{path}})) {
 	$iflags .= " ".$env->{INCDIRPREFIX}.$dpath;
@@ -1801,6 +1968,8 @@ sub iflags {
 }
 
 package File::Spec;
+
+use vars qw( $_SEP $_MATCH_SEP $_MATCH_VOL );
 
 # Cons is migrating to using File::Spec for portable path name
 # manipulation.  This is the right long-term direction, but there are
@@ -1840,7 +2009,7 @@ BEGIN {
 }
 
 sub canonpath {
-    my ($self,$path) = @_;
+    my ($self, $path) = @_;
     if ($main::_WIN32) {
 	$path =~ s/^([a-z]:)/\u$1/s;
 	$path =~ s|/|\\|g;
@@ -1875,6 +2044,7 @@ sub catfile {
     return $file unless @_;
     my $dir = $self->catdir(@_);
     $dir .= $_SEP unless substr($dir,-1) eq $_SEP;
+    $file = '' if ! defined($file);
     return $dir.$file;
 }
 
@@ -1889,7 +2059,7 @@ sub curdir {
 }
 
 sub file_name_is_absolute {
-    my ($self,$file) = @_;
+    my ($self, $file) = @_;
     return scalar($file =~ m{^$_MATCH_VOL}is);
 }
 
@@ -1900,24 +2070,35 @@ sub splitdir {
 }
 
 sub splitpath {
+    my ($self, $path) = @_;
     my $vol = '';
+    my $sep = $_SEP;
     if ($main::_WIN32) {
-	$_[1] =~ s#^([A-Za-z]:)[/\\]#\\#;
-	$vol = $1;
+	if ($path =~ s#^([A-Za-z]:|(?:\\\\|//)[^\\/]+[\\/][^\\/]+)([\\/])#$2#) {
+	    $vol = $1;
+	    $sep = $2;
+	}
     }
-    my(@path) = split(/$_MATCH_SEP/, $_[1], -1);
-    $file = pop @path;
-    $dirs = join($_SEP, @path, '');
+    my(@path) = split(/$_MATCH_SEP/, $path, -1);
+    my $file = pop @path;
+    my $dirs = join($sep, @path, '');
     return ($vol, $dirs, $file);
 }
 
 sub updir {
     '..'
 }
+
+sub case_tolerant {
+    return $main::_WIN32;
+}
 
 # Directory and file handling. Files/dirs are represented by objects.
 # Other packages are welcome to add component-specific attributes.
 package dir;
+
+use vars qw( $SEPARATOR $MATCH_SEPARATOR $CURDIR $UPDIR
+	     $cwd_vol %root $top $cwd );
 
 BEGIN {
     # A portable way of determing our directory separator.
@@ -1931,8 +2112,10 @@ BEGIN {
     }
     # Cache these values so we don't have to make a method call
     # every time we need them.
-    $dir::CURDIR = File::Spec->curdir;	# '.' on UNIX
-    $dir::UPDIR = File::Spec->updir;	# '..' on UNIX
+    $CURDIR = File::Spec->curdir;	# '.' on UNIX
+    $UPDIR = File::Spec->updir;	# '..' on UNIX
+    #
+    $cwd_vol = '';
 }
 
 # Annotate a node (file or directory) with info about the
@@ -1999,6 +2182,7 @@ sub _parse_path {
 	# An absolute path name.  If no volume was supplied,
 	# use the volume of our current directory.
 	$vol = $cwd_vol if $vol eq '';
+	$vol = uc($vol) if File::Spec->case_tolerant;
 	if (! defined $root{$vol}) {
 	    # This is our first time looking up a path name
 	    # on this volume, so create a root node for it.
@@ -2020,7 +2204,7 @@ sub _parse_path {
 	    # an entry within the root.  Remove @dirs and $entry
 	    # so the caller gets just the root node itself.
 	    @dirs = ();
-	    $entry = undef;
+	    $entry = '';
 	}
 	$dir = $root{$vol};
     } elsif ($toprel) {
@@ -2043,6 +2227,8 @@ sub _create_dirs {
 	    $dir->{member}->{$e} = $d;
 	} elsif (ref $d eq 'entry') {
 	    bless $d, 'dir';
+	    $d->{member}->{$dir::CURDIR} = $d;
+	    $d->{member}->{$dir::UPDIR} = $dir;
 	} elsif (ref $d eq 'file') {
 	    # This clause is to supply backwards compatibility,
 	    # with a warning, for anyone that's used FilePath
@@ -2242,6 +2428,8 @@ sub link {
     push @{$srcdir->{links}}, @paths;
 }
 
+use vars qw( @tail ); # TODO: Why global ????
+
 sub linked_targets {
     my $tgt = shift;
     my @targets = ();
@@ -2253,7 +2441,7 @@ sub linked_targets {
 	$dir = $tgt->{dir};
     }
     while ($dir) {
-	if (@{$dir->{links}}) {
+	if (defined $dir->{links} && @{$dir->{links}}) {
 	    push(@targets, map(File::Spec->catdir($_, @tail), @{$dir->{links}}));
 	    #print STDERR "Found Link: ${\$dir->path} -> @{\$dir->{links}}\n";
 	}
@@ -2285,9 +2473,12 @@ sub init {
 
     ($cwd_vol, undef, undef) = File::Spec->splitpath($path);
     $cwd_vol = '' if ! defined $cwd_vol;
+    $cwd_vol = uc($cwd_vol) if File::Spec->case_tolerant;
 }
 
 package file;
+
+use vars qw( @ISA $level );
 
 BEGIN { @ISA = qw(dir); $level = 0 }
 
@@ -2462,8 +2653,8 @@ sub suffix {
     $_[0]->{entry} =~ /\.[^\.\/]{0,3}$/;
     $&
   } else {
-    @pieces = split(/\./, $_[0]->{entry});
-    $suffix = pop(@pieces);
+    my @pieces = split(/\./, $_[0]->{entry});
+    my $suffix = pop(@pieces);
     return ".$suffix";
   }
 }
@@ -2537,6 +2728,7 @@ sub _build {
 
     $self->{status} = '';
 
+    my $dep;
     for $dep (@$rdeps) {
 	if ((build $dep) eq 'errors') {
 	    # Propagate dependent errors to target.
@@ -2590,6 +2782,8 @@ sub _build {
     # Then check for currency.
     if (! 'sig'->current($self, $sig)) {
 	# We have to build/derive the file.
+	print((' ' x $level), "Rebuilding ", $self->path, ": out of date.\n")
+		if $param::depends;
 	# First check to see if the built file is cached.
 	if ($builder->cachin($self, $sig)) {
 	    'sig'->set($self, $sig);
@@ -2627,9 +2821,12 @@ sub bind {
 	# the same and the sources are the same.
 	if ("$self->{builder} @{$self->{sources}}" ne "$builder @sources") {
 	    $main::errors++;
-	    my $path = $self->path;
-	    my $err = "$0: attempt to build ${\$self->path} twice, " .
-		      "in different ways!\n";
+	    my($_foo1, $script1, $line1, $sub1) = @{$self->creator};
+	    my($_foo2, $script2, $line2, $sub2) = script::caller_info;
+	    my $err = "\t${\$self->path}\n" .
+		      "\tbuilt (at least) two different ways:\n" .
+		      "\t\t$script1, line $line1:  $sub1\n" .
+		      "\t\t$script2, line $line2:  $sub2\n";
 	    die $err;
 	}
 	return;
@@ -2637,6 +2834,7 @@ sub bind {
     if ($param::wflag) {
 	my($script, $line, $sub);
 	(undef, $script, $line, $sub) = script::caller_info;
+	$self->{script} = '' if ! defined $self->{script};
 	$self->{script} .= "; " if $self->{script};
 	$self->{script} .= qq($sub in "$script", line $line);
     }
@@ -2666,6 +2864,8 @@ sub relpath {
 # Use file methods until someone blesses them one way or the other.
 package entry;
 
+use vars qw( @ISA );
+
 BEGIN { @ISA = qw(file) }
 
 # File utilities
@@ -2691,7 +2891,7 @@ sub install {
 # Returns undef on failure. Preserves mtime and mode.
 sub copy {
     my ($sp, $tp) = @_;
-    my($mode, $length, $atime, $mtime) = (stat($sp))[2,7,8,9];
+    my ($mode, $length, $atime, $mtime) = (stat($sp))[2,7,8,9];
 
     # Use Perl standard library module for file copying, which handles
     # binary copies. <schwarze@isa.de> 1998-06-18
@@ -2699,15 +2899,25 @@ sub copy {
 	warn qq($0: can\'t install "$sp" to "$tp" ($!)\n); #'
 	return undef;
     }
+    # The file has been created, so try both the chmod and utime,
+    # first making sure the copy is writable (because permissions
+    # affect the ability to modify file times on some operating
+    # systems), and then changing permissions back if necessary.
+    my $ret = 1;
+    my $wmode = $mode | 0700;
+    if (! chmod $wmode, $tp) {
+	warn qq($0: can\'t set mode $wmode on file "$tp" ($!)\n); #'
+	$ret = undef;
+    }
     if (! utime $atime, $mtime, $tp) {
 	warn qq($0: can\'t set modification time for file "$tp" ($!)\n); #'
-	return undef;
+	$ret = undef;
     }
-    if (! chmod $mode, $tp) {
+    if ($mode !=  $wmode && ! chmod $mode, $tp) {
 	warn qq($0: can\'t set mode $mode on file "$tp" ($!)\n); #'
-	return undef;
+	$ret = undef;
     }
-    return 1;
+    return $ret;
 }
 
 # Ensure that the specified directory exists.
@@ -2729,6 +2939,10 @@ sub mkdir {
 # Signature package.
 package sig::hash;
 
+use vars qw( $called );
+
+use vars qw( $called );
+
 sub init {
     my($dir) = @_;
     my($consign) = $dir->prefix . ".consign";
@@ -2737,7 +2951,7 @@ sub init {
 	open(CONSIGN, $consign) || die("$0: can't open $consign ($!)\n");
 	while(<CONSIGN>) {
 	    chop;
-	    ($file,$sig) = split(/:/,$_);
+	    my ($file, $sig) = split(/:/,$_);
 	    $dhash->{$file} = $sig;
 	}
 	close(CONSIGN);
@@ -2763,6 +2977,7 @@ sub out {
 sub END {
     return if $called++; # May be called twice.
     close(CONSIGN); # in case this came in via ^C.
+    my $dir;
     for $dir (values %sig::hash::dirty) {
 	my($consign) = $dir->prefix . ".consign";
 	my($constemp) = $consign . ".$$";
@@ -2825,6 +3040,15 @@ sub out {
 	unlink($lp);
 	return if ! eval { link($cp, $lp) };
 	rename($lp, $sp);
+	# Unix98 says, "If the old argument and the new argument both
+	# [refer] to the same existing file, the rename() function
+	# returns successfully and performs no other action."  So, if
+	# $lp and $sp are links (i.e., $cp and $sp are links), $lp is
+	# left, and we must unlink it ourselves.  If the rename failed
+	# for any reason, it is also good form to unlink the temporary
+	# $lp.  Otherwise $lp no longer exists and, barring some race,
+	# the unlink fails silently.
+	unlink($lp);
 	return;
     }
 
@@ -2839,6 +3063,8 @@ sub out {
 # Generic signature handling
 package sig;
 
+use vars qw( @ISA );
+
 sub select {
     my($package, $subclass) = @_;
     @ISA = ($package . "::" . $subclass);
@@ -2849,6 +3075,8 @@ sub select {
 package sig::md5;
 
 use MD5 1.6;
+
+use vars qw( $md5 );
 
 BEGIN {
     $md5 = new MD5;
@@ -2872,7 +3100,7 @@ sub signature {
 	my($sigtime) = sig::hash::in($file);
 	if ($file->is_on_rpath) {
 	    if ($sigtime) {
-		my($htime, $hsig) = split(' ',$sigtime);
+		my ($htime, $hsig) = split(' ',$sigtime);
 		if (! $hsig) {
 		    # There was no separate $htime recorded in
 		    # the .consign file, which implies that this
@@ -2890,7 +3118,7 @@ sub signature {
 	    return $file->{sig} = $file->path . $time;
 	}
 	if ($sigtime) {
-	    my($htime, $hsig) = split(' ',$sigtime);
+	    my ($htime, $hsig) = split(' ',$sigtime);
 	    if ($htime eq $time) {
 		return $file->{sig} = $hsig;
 	    }
@@ -2959,7 +3187,8 @@ sub srcsig {
     my($path) = @_;
     $md5->reset();
     open(FILE, $path) || return '';
-    $md5->addfile(FILE);
+    binmode(FILE);
+    $md5->addfile(\*FILE);
     close(FILE);
     # Uncomment this to print the result of file signature calculation.
     # <knight@baldmt.com> 1998-10-13
@@ -2973,19 +3202,11 @@ __END__;
 
 =head1 NAME
 
-Cons - Cons: A Software Construction System
+Cons - A Software Construction System
 
 =head1 DESCRIPTION
 
-The original document was automatically derived from the F<cons/cons.html>
-by B<html2pod>, thanks to Ulrich Pfiefer. Later revisions were created from
-the original.
-
-=head1 Cons: A Software Construction System
-
-by Bob Sidebotham, et al. F<cons-discuss@gnu.org>
-
-A guide and reference for version 2.0.2
+A guide and reference for version 2.1.2
 
 Copyright (c) 1996-2000 Free Software Foundation, Inc.
 
@@ -3296,6 +3517,25 @@ top-level. Hybrid schemes are also possible. A separately maintained
 component that needs to be incorporated into a build tree, for example,
 might hook into the build tree in one place, but define its own construction
 hierarchy.
+
+By default, Cons does not change its working directory to the directory
+containing a subsidiary F<Conscript> file it is including.  This behavior
+can be enabled for a build by specifying, in the top-level F<Construct>
+file:
+
+	Conscript_chdir 1;
+
+When enabled, Cons will change to the subsidiary F<Conscript> file's
+containing directory while reading in that file, and then change back
+to the top-level directory once the file has been processed.
+
+It is expected that this behavior will become the default in some future
+version of Cons.  To prepare for this transition, builds that expect
+Cons to remain at the top of the build while it reads in a subsidiary
+F<Conscript> file are encouraged to explicitly disable this feature
+as follows:
+
+	Conscript_chdir 0;
 
 
 =head2 Relative, top-relative, and absolute file names
@@ -4329,6 +4569,7 @@ are overridden in the default:
   CC		=> 'cl',
   CFLAGS	=> '/nologo',
   CCCOM		=> '%CC %CFLAGS %_IFLAGS /c %< /Fo%>',
+  CXXCOM        => '%CXX %CXXFLAGS %_IFLAGS /c %< /Fo%>',
   INCDIRPREFIX  => '/I',
   LINK		=> 'link',
   LINKCOM	=> '%LINK %LDFLAGS /out:%> %< %_LDIRS %LIBS',
@@ -4393,6 +4634,21 @@ your own execution path, in your top-level F<Construct> file (or perhaps by
 importing an appropriate construction package with the Perl C<use>
 command). The default variables are intended to get you off the ground.
 
+=head2 Interpolating construction variables
+
+Construction environment variables may be interpolated in the source and
+target file names by prefixing the construction variable name with C<%>.
+
+  $env = new cons(
+	DESTDIR	=>	'programs',
+	SRCDIR	=>	'src',
+  );
+  Program $env '%DESTDIR/hello', '%SRCDIR/hello.c';
+
+Expansion of construction variables is recursive--that is, the file
+name(s) will be re-expanded until no more substitutions can be made. If
+a construction variable is not defined in the environment, then the null
+string will be substituted.
 
 =head1 Default construction methods
 
@@ -4525,7 +4781,8 @@ Within the construction command, any variable from the construction
 environment may be introduced by prefixing the name of the construction
 variable with C<%>. This is recursive: the command is expanded until no more
 substitutions can be made. If a construction variable is not defined in the
-environment, then the null string will be substituted.
+environment, then the null string will be substituted.  A doubled C<%%>
+will be replaced by a single C<%> in the construction command.
 
 There are several pseudo variables which will also be expanded:
 
@@ -4698,23 +4955,30 @@ specified object files. It is invoked in the following manner:
 
   Program $env <program name>, <source or object files>;
 
+The program name will have the value of the C<SUFEXE> construction
+variable appended (by default, C<.exe> on Win32 systems, nothing on Unix
+systems) if the suffix is not already present.
+
 Source files may be specified in place of objects files--the C<Objects>
 method will be invoked to arrange the conversion of all the files into
 object files, and hence all the observations about the C<Objects> method,
-above, apply to this method also. The actual linking of the program will be
-handled by an external command which results from expanding the C<LINKCOM>
-construction variable, with C<%E<lt>> set to the object files to be linked (in
-the order presented), and C<%E<gt>> set to the target (see the C<Command> method
-for expansion details). The user may set additional variables in the
-construction environment, including C<LINK>, to define which program to use
-for linking, C<LIBPATH>, a colon-separated list of library search paths, for
-use with library specifications of the form I<-llib>, and C<LIBS>,
-specifying the list of libraries to link against (in either I<-llib> form or
-just as pathnames. Relative pathnames in both C<LIBPATH> and C<LIBS> are
-interpreted relative to the directory in which the associated construction
-environment created (absolute and top-relative names may also be used). Cons
-automatically sets up dependencies on any libraries mentioned in C<LIBS>:
-those libraries will be built before the command is linked.
+above, apply to this method also.
+
+The actual linking of the program will be handled by an external command
+which results from expanding the C<LINKCOM> construction variable, with
+C<%E<lt>> set to the object files to be linked (in the order presented),
+and C<%E<gt>> set to the target (see the C<Command> method for expansion
+details). The user may set additional variables in the construction
+environment, including C<LINK>, to define which program to use for
+linking, C<LIBPATH>, a colon-separated list of library search paths,
+for use with library specifications of the form I<-llib>, and C<LIBS>,
+specifying the list of libraries to link against (in either I<-llib>
+form or just as pathnames. Relative pathnames in both C<LIBPATH> and
+C<LIBS> are interpreted relative to the directory in which the associated
+construction environment is created (absolute and top-relative names may
+also be used). Cons automatically sets up dependencies on any libraries
+mentioned in C<LIBS>: those libraries will be built before the command
+is linked.
 
 
 =head2 The C<Library> method
@@ -4724,20 +4988,26 @@ specified object files. It is invoked as follows:
 
   Library $env <library name>, <source or object files>;
 
+The library name will have the value of the C<SUFLIB> construction
+variable appended (by default, C<.lib> on Win32 systems, C<.a> on Unix
+systems) if the suffix is not already present.
+
 Source files may be specified in place of objects files--the C<Objects>
 method will be invoked to arrange the conversion of all the files into
 object files, and hence all the observations about the C<Objects> method,
-above, apply to this method also. The actual creation of the library will be
-handled by an external command which results from expanding the C<ARCOM>
-construction variable, with C<%E<lt>> set to the library members (in the order
-presented), and C<%E<gt>> to the library to be created (see the C<Command>
-method for expansion details). The user may set variables in the
-construction environment which will affect the operation of the
-command. These include C<AR>, the archive program to use, C<ARFLAGS>, which
-can be used to modify the flags given to the program specified by C<AR>, and
-C<RANLIB>, the name of a archive index generation program, if needed (if the
-particular need does not require the latter functionality, then C<ARCOM>
-must be redefined to not reference C<RANLIB>).
+above, apply to this method also.
+
+The actual creation of the library will be handled by an external
+command which results from expanding the C<ARCOM> construction variable,
+with C<%E<lt>> set to the library members (in the order presented),
+and C<%E<gt>> to the library to be created (see the C<Command> method
+for expansion details). The user may set variables in the construction
+environment which will affect the operation of the command. These
+include C<AR>, the archive program to use, C<ARFLAGS>, which can be
+used to modify the flags given to the program specified by C<AR>, and
+C<RANLIB>, the name of a archive index generation program, if needed
+(if the particular need does not require the latter functionality,
+then C<ARCOM> must be redefined to not reference C<RANLIB>).
 
 The C<Library> method allows the same library to be specified in multiple
 method invocations. All of the contributing objects from all the invocations
@@ -5227,14 +5497,34 @@ can be attached to a source file by:
 
     QuickScan $env \myscan, "$_.smf";
 
-=head1 Support and Suggestions
+=head1 SUPPORT AND SUGGESTIONS
 
 Cons is maintained by the user community.  To subscribe, send mail to
 B<cons-discuss-request@gnu.org> with body B<subscribe>.
 
-Please report any bugs/fixes/suggestions through the
-cons-discuss@gnu.org mailing list.
+Please report any suggestions through the B<cons-discuss@gnu.org> mailing
+list.
 
-The Official cons site is: http://www.dsmit.com/cons/
+=head1 BUGS
+
+Sure to be some. Please report any bugs through the B<bug-cons@gnu.org>
+mailing list.
+
+=head1 INFORMATION ABOUT CONS
+
+Information about CONS can be obtained from the official cons web site
+B<http://www.dsmit.com/cons/> or its mirrors listed there.
+
+The cons maintainers can be contacted by email at
+B<cons-maintainers@gnu.org>
+
+=head1 AUTHORS
+
+Originally by Bob Sidebotham. Then significantly enriched by the members
+of the Cons community B<cons-discuss@gnu.org>.
+
+The Cons community would like to thank Ulrich Pfeifer for the original pod
+documentation derived from the F<cons.html> file. Cons documentation is now
+a part of the program itself.
 
 =cut
