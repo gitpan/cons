@@ -1,8 +1,13 @@
-$Id: README,v 1.6 2000/06/06 19:15:55 rv Exp $
+$Id: README,v 1.8 2000/06/16 20:42:52 knight Exp $
 
 Cons is a Perl-based make replacement.  It is not compatible with make,
 but has a number of powerful capabilities not found in other software
 construction systems, including make.
+
+This README accompanies a development release of Cons, intended for
+advanced features and quick delivery of bug fixes.  If you are looking
+for the latest stable release, look for an even-digit minor version number
+(2.0.x, 2.2.x, etc.).
 
 Cons is distributed in two different packages, one with a full regression
 test suite (cons-plus-test-$version.tgz) and the other without
@@ -19,7 +24,7 @@ You will need Perl 5.002 or better and the Perl MD5 Extension
 This program is known to work on a variety of platforms: it's in production
 use on versions of FreeBSD, Linux, SunOS, Solaris, HPUX, AIX, IRIX and NT.
 
-Documentation is supplied in POD format (thanks to Ulrich Pfiefer).
+Documentation is supplied in POD format (thanks to Ulrich Pfeifer).
 
 A cons discussion group, cons-discuss@gnu.org, has been created.  If
 you wish to subscribe, send mail to cons-discuss-request@gnu.org with
