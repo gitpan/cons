@@ -1,7 +1,69 @@
 Cons is a software construction system. A description appears under
 "Cons 1.0", below.
 
-$Id: CHANGES,v 1.81 2000/09/10 04:59:21 knight Exp $
+$Id: CHANGES,v 1.101.2.1 2000/11/17 05:39:08 knight Exp $
+
+Cons 2.2.0
+**********
+
+- Use the Digest::MD5 module in preference to the now-deprecated MD5
+  module.  Use MD5 if Digest::MD5 isn't available.
+
+- Fix the Objects method to return meaningful path names even if the
+  object isn't underneath the Conscript directory:  a top-relative
+  path name if it's underneath the Construct directory, an
+  absolute path name otherwise.
+
+- Fix documentation:  CCOM should be CCCOM. Remove POD directives
+  that were showing up in a verbatim paragraph.  The verbatim
+  %[-%] example didn't work intuitively.  Change misleading use
+  of $ENV for an environment name, which doesn't work because it's
+  special to Perl.
+
+- Missed some WIN32-specific -w warnings; now fixed.
+
+- File name fixes:  Added canonicalization so dir//file and dir/file
+  refer to the same file.  Simplified lookups in the root
+  directory to avoid reporting /bin/cat as //bin/cat.
+
+- Fix a bug that wouldn't allow SUFOBJ to have more than one dot
+  (that is, no object files with names like .arch.o).
+
+- Die with an appropriate message when someone tries to Export ENV or any
+  other special Perl variable that can only exist in the main:: package.
+  (Bug reported by Johan Holmberg and Eric Brown.)
+
+- Rework Conscript variable namespace maintenance to allow external
+  packages to be used.  Remove variable names from the script:: namespace
+  instead of undef'ing their values.  Restore names whenever we execute
+  perl code instead of a shell command.
+  (Based on work by Johan Holmberg.)
+
+- When using the -t option, change how the top is located to avoid
+  calling dir::init() too early.  This was causing Cons to use
+  full path names for files and causing needless recompiles when
+  jumping back and forth between using -t and not.
+  (Based on a mailing-list patch by Wayne Scott.)
+
+- When using the -t option, emulate make by printing a "cons: Entering
+  directory `xxx'" message when we chdir to the Construct directory,
+  to allow the emacs compile feature to keep track of where files with
+  build errors really are.
+  (Based on a mailing-list patch by Wayne Scott.)
+
+- Allow the Depends method to take an array ref of targets to specify
+  multiple target dependencies at once.
+  (Bug reported by Zachary Deretsky.)
+
+- The QuickScan method's PATH was hard-coded to use ':' as the separator.
+  Fix to use ';' on Windows NT, or to use an array ref of directories.
+  (Bug reported by Zachary Deretsky.)
+
+- Fix the SourcePath method so it can process and return an array.
+
+Contributions from Gary Oberbrunner <garyo@genarts.com>
+
+- Support executing perl code instead of shell commands to build a target.
 
 Cons 2.1.2
 **********

@@ -1,4 +1,4 @@
-# $Id: TODO,v 1.41 2000/09/11 04:16:26 knight Exp $
+# $Id: TODO,v 1.45 2000/10/02 22:17:18 knight Exp $
 
 Fix signature documentation
 	Johan Holmberg 27 January 2000
@@ -29,12 +29,6 @@ Separate into plug-in modules for:
 	compiler/linker subsystem
 	OS (environment variables, path transformations?)
 
-Be able to "use English" in Construct/Conscript files
-	Bob Sidebotham 6 May 1998
-
-Break "package script" into separate packages for each script
-	Jochen Schwarze <schwarze@isa.de> 6 May 1998
-
 Target aliases
 	Steven Knight <knight@baldmt.com> 12 April 1999
 
@@ -43,8 +37,6 @@ Case-insensitive file names (for Windows NT, others?)
 Content-based file:  build every time, then compute MD5 checksum on result
 	Brad Garcia 16 December 1999
 	Wayne Scott 25 January 2000
-
-Use Digest::MD5 instead of MD5.
 
 AddTarget method to add targets dynamically to the list
 	Gary Oberbrunner 4 May 2000
@@ -63,9 +55,6 @@ Better Carp error messages
 
 Give all .consign entries both a time stampe and a signature
 	Theo Petersen 10 May 2000
-
-Execute perl instead of shell to build a file
-	Gary Oberbrunner 11 May 2000
 
 AfterBuild method (used to dynamically add targets)
 	Gary Oberbrunner 11 May 2000
@@ -94,6 +83,9 @@ generates errors:
 	cons.pl: script errors encountered: construction aborted
 Check other methods for the same problem.
 Bug reported by Allan Stokes.
+
+Redirect STDOUT and/or STDERR to log file on NT.
+	Zachary Deretsky 2 October 2000
 
 
 

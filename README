@@ -1,4 +1,4 @@
-$Id: README,v 1.9 2000/09/14 18:28:16 knight Exp $
+$Id: README,v 1.10 2000/09/21 03:16:53 knight Exp $
 
 Cons is a Perl-based make replacement.  It is not compatible with make,
 but has a number of powerful capabilities not found in other software
@@ -13,8 +13,8 @@ A related package (cons-test) contains a portable test suite for Cons,
 plus a wrapper script and supporting modules for executing the tests.
 You do not need this other package to use Cons.
 
-You will need Perl 5.002 or better and the Perl MD5 Extension
-(MD5-1.6.tar.gz or greater), available from CPAN.
+You will need Perl 5.002 or better and the Perl Digest::MD5 module,
+available from CPAN.
 
 Cons is known to work on a variety of platforms: it's in production
 use on versions of FreeBSD, Linux, SunOS, Solaris, HPUX, AIX, IRIX and

@@ -1,45 +1,31 @@
-$Id: RELEASE,v 1.19 2000/09/13 16:26:50 knight Exp $
+$Id: RELEASE,v 1.21.2.1 2000/11/17 05:39:08 knight Exp $
 
-Cons 2.1.2
+Cons 2.2.0
 **********
 
-This release contains a great many small changes for portability and
-general clean-up, most of which should not be noticed by most users.
+This release is a stable release of Cons.  It contains all the changes
+from the 2.1 development branch, including many changes developed on
+that branch after the release of 2.1.2.
 
 Visible changes include:
 
-    --	A fix for UNC path names (\\share\dir\subdir\file) on Windows NT.
+    --	Cons will now use the Digest::MD5 module in preference to the
+    	older, deprecated MD5 module.  The MD5 module will be used if
+	Digest::MD5 is not installed.
 
-    --	A new Conscript_chdir() method that can be used to enable
-	Perl file-globbing in subsidiary Conscript files.
+    --	When using the -t option, Cons now prints a message about its
+    	internal directory-change to the top-level directory.  This
+	allows emacs to be aware of the directory to which path names
+	in build output are relative.
 
-    --	Correct exit-status reporting on Windows NT, including
-	identifying failures to find a program in the search path.
+    --	The QuickScan method on Windows NT now uses ';' instead of
+	':' as the PATH separator.  An array ref may also be used.
 
-    --	There is now a separate cons-tests package that contains
-	the regression tests and a productized cons-test script
-	for executing them.
+    --	The Depends and SourcePath methods can now cope with an
+    	array of targets.
 
-    --	The cons and cons-test packages are now available in both
-	RPM and Debian formats.
-
-See the CHANGES file for details.
-
-Cons 2.1.1
-**********
-
-2.1.1 was the first separate development release of Cons.  It was
-based on Cons release 2.0 and contains the following notable changes:
-
-    --	Fixes for the -t option.
-
-    --	Support case-insensitive drive letters on WIN32 systems.
-
-    --	Better error messages for some cases.
-
-    --	Support for binary-file signatures on WIN32 systems.
-
-See the CHANGES file for details.
+This release contains many other fixes and less-visible changes.  See the
+CHANGES file for details.
 
 General
 *******

@@ -47,14 +47,14 @@ goto endofperl
 # Regression tests keep the code honest by checking for warnings
 # and "use strict" failures.
 
-# $Id: cons.pl,v 1.103 2000/09/10 04:59:21 knight Exp $
+# $Id: cons.pl,v 1.129 2000/11/16 12:22:37 knight Exp $
 
 use vars qw( $ver_num $ver_rev $version );
 
-$ver_num = "2.1";
-$ver_rev = ".2";
+$ver_num = "2.2";
+$ver_rev = ".0";
 $version = sprintf "This is Cons %s%s " .
-	    '($Id: cons.pl,v 1.103 2000/09/10 04:59:21 knight Exp $)'. "\n",
+	    '($Id: cons.pl,v 1.129 2000/11/16 12:22:37 knight Exp $)'. "\n",
 	    $ver_num, $ver_rev;
 
 # Cons: A Software Construction Tool.
@@ -215,7 +215,7 @@ Arguments can be any of the following, in any order:
 
 # Simplify program name, if it is a path.
 {
-    my ($vol, $dir, $file) = File::Spec->splitpath($0);
+    my ($vol, $dir, $file) = File::Spec->splitpath(File::Spec->canonpath($0));
     $0 = $file;
 }
 
@@ -399,8 +399,9 @@ sub equate {
 'sig'->select($param::sigpro);
 
 # Cleanup after an interrupt.
-$SIG{HUP} = $SIG{INT} = $SIG{QUIT} = $SIG{TERM} = sub {
-    $SIG{PIPE} = $SIG{HUP} = $SIG{INT} = $SIG{QUIT} = $SIG{TERM} = 'IGNORE';
+$SIG{INT} = $SIG{QUIT} = $SIG{TERM} = sub {
+    $SIG{PIPE} = $SIG{INT} = $SIG{QUIT} = $SIG{TERM} = 'IGNORE';
+    $SIG{HUP} = $SIG{INT} if ! $main::_WIN32;
     warn("\n$0: killed\n");
     # Call this first, to make sure that this processing
     # occurs even if a child process does not die (and we
@@ -409,6 +410,7 @@ $SIG{HUP} = $SIG{INT} = $SIG{QUIT} = $SIG{TERM} = sub {
     wait();
     exit(1);
 };
+$SIG{HUP} = $SIG{INT} if ! $main::_WIN32;
 
 # Cleanup after a broken pipe (someone piped our stdout?)
 $SIG{PIPE} = sub {
@@ -427,7 +429,7 @@ if ($param::depfile) {
 # If the supplied top-level Conscript file is not in the
 # current directory, then change to that directory.
 {
-    my ($vol, $dir, $file) = File::Spec->splitpath($param::topfile);
+    my ($vol, $dir, $file) = File::Spec->splitpath(File::Spec->canonpath($param::topfile));
     if ($vol || $dir) {
 	my($cd) = File::Spec->catpath($vol, $dir, undef);
 	chdir($cd) || die("$0: couldn't change to directory $cd ($!)\n");
@@ -436,24 +438,28 @@ if ($param::depfile) {
 }
 
 # Walk up the directory hierarchy looking for a Conscript file (if -t set).
-my $target_top;
-if ($param::traverse) {
-    my $cwd = cwd();
-    my $ttop = dir::lookupdir(undef, $cwd);
-    my $dir = $ttop;
-    while (! -f $dir->prefix . $param::topfile) {
-	$dir = $dir->up;
-	die("$0: unable to find $param::topfile.\n") if ! $dir;
+my($target_top);
+my(@targetdir) = ();
+if ($param::traverse && ! -f $param::topfile) {
+    my($vol, $dirs, $file) = File::Spec->splitpath(cwd());
+    my(@dirs) = (File::Spec->splitdir($dirs), $file);
+    while (! -f File::Spec->catpath($vol, File::Spec->catdir(@dirs), $param::topfile)) {
+	die("$0: unable to find $param::topfile.\n") if ! @dirs;
+	unshift(@targetdir, pop(@dirs));
     }
-    if ($dir != $ttop) {
-	chdir($dir->path);
-	@targets = map($ttop->lookup($_)->path, @targets);
-	$target_top = $ttop;
-    }
+    my($cwd) = File::Spec->catpath($vol, File::Spec->catdir(@dirs), '');
+    print "$0: Entering directory `$cwd'\n";
+    chdir($cwd);
+    @targets = map {File::Spec->catdir(@targetdir, $_)} @targets;
 }
 
 # Set up $dir::top and $dir::cwd, now that we are in the right directory.
 dir::init();
+
+#
+if (@targetdir) {
+    $target_top = $dir::top->lookupdir(File::Spec->catdir(@targetdir));
+}
 
 # Now handle override file.
 package override;
@@ -613,12 +619,73 @@ sub buildtarget {
     return "none";
 }
 
+package NameSpace;
+
+# Return a hash that maps the name of symbols in a namespace to an
+# array of refs for all types for which the name has a defined value.
+# A list of symbols may be specified; default is all symbols in the
+# name space.
+sub save {
+    my $package = shift;
+    my(%namerefs, $var, $type);
+    no strict 'refs';
+    @_ = keys %{$package."::"} if ! @_;
+    foreach $var (@_) {
+	$namerefs{$var} = [];
+	my $fqvar = $package."::".$var;
+	# If the scalar for this variable name doesn't already
+	# exist, *foo{SCALAR} will autovivify the reference
+	# instead of returning undef, so unlike the other types,
+	# we have to dereference to find out if it exists.
+	push(@{$namerefs{$var}}, *{$fqvar}{SCALAR})
+		    if defined ${*{$fqvar}{SCALAR}};
+	foreach $type (qw(ARRAY HASH CODE IO)) {
+	    push(@{$namerefs{$var}}, *{$fqvar}{$type})
+			  if defined *{$fqvar}{$type};
+	}
+    }
+    return \%namerefs;
+}
+
+# Remove the specified symbols from the namespace.
+# Default is to remove all.
+sub remove {
+    my $package = shift;
+    my(%namerefs, $var);
+    no strict 'refs';
+    @_ = keys %{$package."::"} if ! @_;
+    foreach $var (@_) {
+	delete ${$package."::"}{$var};
+    }
+}
+
+# Restore values to symbols specified in a hash as returned
+# by NameSpace::save.
+sub restore {
+    my($package, $namerefs) = @_;
+    my($var, $ref);
+    no strict 'refs';
+    foreach $var (keys %$namerefs) {
+	my $fqvar = $package."::".$var;
+	foreach $ref (@{$namerefs->{$var}}) {
+	    *{$fqvar} = $ref;
+	}
+    }
+}
+
 # Support for "building" scripts, importing and exporting variables.
 # With the exception of the top-level routine here (invoked from the
 # main package by cons), these are all invoked by user scripts.
 package script;
 
-use vars qw( $ARG $caller_dir_path );
+use vars qw( $ARG $caller_dir_path %special_var );
+
+BEGIN {
+    # We can't Export or Import the following variables because Perl always
+    # treats them as part of the "main::" package (see perlvar(1)).
+    %special_var = map {$_ => 1} qw(ENV INC ARGV ARGVOUT SIG
+				    STDIN STDOUT STDERR);
+}
 
 # This is called from main to interpret/run the top-level Construct
 # file, passed in as the single argument.
@@ -628,6 +695,11 @@ sub main::doscripts {
     # Now set up the includes/excludes (after the Construct file is read).
     $param::include = join('|', @param::include);
 
+    # Save the original variable names from the script package.
+    # These will stay intact, but any other "script::" variables
+    # defined in a Conscript file will get saved, deleted,
+    # and (when necessary) restored.
+    my(%orig_script_var) = map {$_ => 1} keys %script::;
     $caller_dir_path = undef;
     my $cwd = Cwd::cwd();
     my(@scripts) = pop(@priv::scripts);
@@ -635,9 +707,10 @@ sub main::doscripts {
 	my($path) = $priv::self->{script}->rsrcpath;
 	if (-f $path) {
 	    $dir::cwd = $priv::self->{script}->{dir};
+	    # Handle chdir to the Conscript file directory, if necessary.
 	    my ($vol, $dir, $file);
 	    if ($param::conscript_chdir) {
-		($vol, $dir, $file) = File::Spec->splitpath($path);
+		($vol, $dir, $file) = File::Spec->splitpath(File::Spec->canonpath($path));
 		if ($vol ne '' || $dir ne '') {
 		    $caller_dir_path = File::Spec->catpath($vol, $dir, undef);
 		    chdir($caller_dir_path) ||
@@ -646,7 +719,17 @@ sub main::doscripts {
 	    } else {
 		$file = $path;
 	    }
+	    # Actually process the Conscript file.
 	    do $file;
+	    # Save any variables defined by the Conscript file
+	    # so we can restore them later, if needed;
+	    # then delete them from the script:: namespace.
+	    my(@del) = grep(! $orig_script_var{$_}, keys %script::);
+	    if (@del) {
+		$priv::self->{script}->{pkgvars} =
+						NameSpace::save('script', @del);
+		NameSpace::remove('script', @del);
+	    }
 	    if ($caller_dir_path) {
 		chdir($cwd);
 		$caller_dir_path = undef;
@@ -669,17 +752,6 @@ sub main::doscripts {
 		$where = " ($sub in $script, line $line)";
 	    }
 	    warn qq(Ignoring missing script "$path"$where);
-	}
-
-# reset "a-zA-Z";# Reset here, to give Construct chance at globals (i.e. %ARG).
-# RESET causes a memory corruption problem, with all sorts of bad side effects
-# so we've replaced it with the following code.
-	my ($key, $val);
-	while (($key,$val) = each %script::) {
-	    local(*priv::script) = $val;
-	    undef $priv::script;
-	    undef @priv::script;
-	    undef %priv::script;
 	}
     }
     die("$0: script errors encountered: construction aborted\n")
@@ -757,17 +829,25 @@ sub Local {
 
 # Export variables to any scripts invoked from this one.
 sub Export {
-    @{$priv::self->{exports}} = @_;
+    my(@illegal) = grep($special_var{$_}, @_);
+    if (@illegal) {
+	die qq($0: cannot Export special Perl variables: @illegal\n);
+    }
+    @{$priv::self->{exports}} = grep(! defined $special_var{$_}, @_);
 }
 
 # Import variables from the export list of the caller
 # of the current script.
 sub Import {
+    my(@illegal) = grep($special_var{$_}, @_);
+    if (@illegal) {
+	die qq($0: cannot Import special Perl variables: @illegal\n");
+    }
     my($parent) = $priv::self->{parent};
     my($imports) = $priv::self->{imports};
     @{$priv::self->{exports}} = keys %$imports;
     my($var);
-    while ($var = shift) {
+    foreach $var (grep(! defined $special_var{$_}, @_)) {
 	if (!exists $imports->{$var}) {
 	    my($path) = $parent->{script}->path;
 	    die qq($0: variable "$var" not exported by file "$path"\n);
@@ -787,8 +867,7 @@ sub Import {
 # the current script.
 sub Build {
     my(@files) = map($dir::cwd->lookupfile($_), @_);
-    my(%imports);
-    map($imports{$_} = ${"script::$_"}, @{$priv::self->{exports}});
+    my(%imports) = map {$_ => ${"script::$_"}} @{$priv::self->{exports}};
     my $file;
     for $file (@files) {
 	next if $param::include && $file->path !~ /$param::include/o;
@@ -854,9 +933,9 @@ sub ConsPath {
 
 # Return the source path of the supplied path.
 sub SourcePath {
-    my($path) = @_;
-    my($file) = $dir::cwd->lookupfile($path);
-    return $file->rsrcpath;
+    wantarray
+	? map($dir::cwd->lookupfile($_)->rsrcpath, @_)
+	: $dir::cwd->lookupfile($_[0])->rsrcpath;
 }
 
 # Search up the tree for the specified cache directory, starting with
@@ -1059,7 +1138,7 @@ sub Install_Local {
 
 sub Objects {
     my($env) = shift;
-    map($_->relpath($dir::cwd),
+    map($dir::cwd->relpath($_),
 	_Objects($env, map($dir::cwd->lookupfile($env->_subst($_)), @_)))
 }
 
@@ -1068,7 +1147,7 @@ sub Objects {
 sub _Objects {
     my($env) = shift;
     my($suffix) = $env->{SUFOBJ};
-    map(_Object($env, $_, $_->{dir}->lookupfile($_->base . $suffix)), @_);
+    map(_Object($env, $_, $_->{dir}->lookupfile($_->base_suf($suffix))), @_);
 }
 
 # Called with an object and source reference.  If no object reference
@@ -1142,7 +1221,7 @@ sub Command {
 	my(@tgts) = map($dir::cwd->lookupfile($_), @$tgt);
 	die("empty target list in multi-target command\n") if !@tgts;
 	$env = $env->_resolve($tgts[0]);
-	my($builder) = find build::command::user($env, $com);
+	my $builder = find build::command::user($env, $com, 'script');
 	my($multi) = build::multiple->new($builder, \@tgts);
 	for $tgt (@tgts) {
 	    $tgt->bind($multi, @sources);
@@ -1150,15 +1229,22 @@ sub Command {
     } else {
 	$tgt = $dir::cwd->lookupfile($tgt);
 	$env = $env->_resolve($tgt);
-	my($builder) = find build::command::user($env, $com);
+	my $builder = find build::command::user($env, $com, 'script');
 	$tgt->bind($builder, @sources);
     }
 }
 
 sub Depends {
     my($env) = shift;
-    my($tgt) = $dir::cwd->lookup($env->_subst(shift));
-    push(@{$tgt->{dep}}, map($dir::cwd->lookup($env->_subst($_)), @_));
+    my($tgt) = $env->_subst(shift);
+    my(@deps) = map($dir::cwd->lookup($env->_subst($_)), @_);
+    if (! ref($tgt)) {
+	$tgt = [ $tgt ];
+    }
+    my($t);
+    foreach $t (map($dir::cwd->lookupfile($_), @$tgt)) {
+	push(@{$t->{dep}}, @deps);
+    }
 }
 
 # Setup a quick scanner for the specified input file, for the
@@ -1226,17 +1312,17 @@ use vars qw( @ISA %com );
 BEGIN { @ISA = qw(build) }
 
 sub find {
-    my($class, $env, $com, $includes) = @_;
+    my ($class, $env, $com, $package) = @_;
     $com = $env->_subst($com);
-    $includes ||= '';
-    $com{$env,$com,$includes} || do {
+    $package ||= '';
+    $com{$env,$com,$package} || do {
 	# Remove unwanted bits from signature -- those bracketed by %( ... %)
-	my($comsig) = $com;
+	my $comsig = $com;
 	$comsig =~ s/^\@\s*//mg;
 	while ($comsig =~ s/%\(([^%]|%[^\(])*?%\)//g) { }
-	my($self) = { env => $env, com => $com, includes => $includes,
+	my $self = { env => $env, com => $com, 'package' => $package,
 		     comsig => $comsig };
-	$com{$env,$com,$includes} = bless $self, $class;
+	$com{$env,$com,$package} = bless $self, $class;
     }
 }
 
@@ -1393,6 +1479,31 @@ sub action {
 	}
 	if ($param::build) {
 
+	  if ($com =~ /^\[perl\]\s*/) {
+	    my $perlcmd = $';
+	    my $status;
+	    {
+	      # Restore the script package variables that were defined
+	      # in the Conscript file that defined this [perl] build,
+	      # so the code executes with the expected variables.
+	      my($package) = $self->{'package'};
+	      my($pkgvars) = $tgt->{conscript}->{pkgvars};
+	      NameSpace::restore($package, $pkgvars) if $pkgvars;
+	      # Actually execute the [perl] command to build the target.
+	      $status = eval "package $package; $perlcmd";
+	      # Clean up the namespace by deleting the package variables
+	      # we just restored.
+	      NameSpace::remove($package, keys %$pkgvars) if $pkgvars;
+	    }
+	    if (!defined($status)) {
+		warn "$0: *** Error during perl command eval: $@.\n";
+		return undef;
+	    } elsif ($status == 0) {
+		warn "$0: *** Perl command returned $status (this indicates an error).\n";
+		return undef;
+	    }
+	    next;
+	  }
 	  #---------------------
 	  # Can't fork on Win32
 	  #---------------------
@@ -1499,15 +1610,15 @@ sub find {
     # with %{PREFLIB}NAME%{SUFLIB}. <schwarze@isa.de> 1998-06-18
 
     if ($main::_WIN32 && !exists $env->{_LIBS}) {
-	my($libs);
+	my $libs;
 	my $name;
-	for $name (split(' ', $env->_subst($env->{LIBS}))) {
+	for $name (split(' ', $env->_subst($env->{LIBS} || ''))) {
 	    if ($name =~ /^-l(.*)/) {
 		$name = "$env->{PREFLIB}$1$env->{SUFLIB}";
 	    }
 	    $libs .= ' ' . $name;
 	}
-	$env->{_LIBS} = "%($libs%)";
+	$env->{_LIBS} = $libs ? "%($libs%)" : '';
     }
     bless find build::command($env, $command);
 }
@@ -1533,7 +1644,7 @@ sub includes {
     if ($main::_WIN32) {
 	# Pass %LIBS symbol through %-substituition
 	# <schwarze@isa.de> 1998-06-18
-	@names = split(' ', $env->_subst($env->{LIBS}));
+	@names = split(' ', $env->_subst($env->{LIBS} || ''));
     } else {
 	@names = split(' ', $env->{LIBS} || '');
     }
@@ -1852,12 +1963,17 @@ use vars qw( @ISA %scanner );
 BEGIN { @ISA = qw(scan) }
 
 sub find {
-    my($class, $code, $env, $path) = @_;
-    $path = '' if ! defined $path;
-    $scanner{$code,$env,$path} || do {
-	my(@path) = map { $dir::cwd->lookupdir($_) } split(/:/, $path);
+    my($class, $code, $env, $pdirs) = @_;
+    if (! defined $pdirs) {
+	$pdirs = [ ] ;
+    } elsif (ref($pdirs) ne 'ARRAY') {
+	$pdirs = [ split(/$main::PATH_SEPARATOR/o, $pdirs) ];
+    }
+    my(@path) = map { $dir::cwd->lookupdir($_) } @$pdirs;
+    my($spath) = "@path";
+    $scanner{$code,$env,$spath} || do {
 	my($self) = { code => $code, env => $env, path => \@path };
-	$scanner{$code,$env,$path} = bless $self;
+	$scanner{$code,$env,$spath} = bless $self;
     }
 }
 
@@ -2194,7 +2310,7 @@ sub _parse_path {
     # Convert all slashes to the native directory separator.
     # This allows Construct files to always be written with good
     # old POSIX path names, regardless of what we're running on.
-    $path =~ s#/#$SEPARATOR#g;
+    $path = File::Spec->canonpath($path);
 
     # File::Spec doesn't understand the Cons convention of
     # an initial '#' for top-relative files.  Strip it.
@@ -2229,17 +2345,10 @@ sub _parse_path {
 	    $root{$vol}->{'srcdir'} = $root{$vol};
 	    bless $root{$vol};
 	}
-	if (@dirs >= 2) {
-	    # We're looking up something below the root directory.
-	    # Strip the initial '/' from the path.
-	    shift @dirs;
-	} elsif ($entry eq '') {
-	    # We're in the root directory, but not looking up
-	    # an entry within the root.  Remove @dirs and $entry
-	    # so the caller gets just the root node itself.
-	    @dirs = ();
-	    $entry = '';
-	}
+	# We're at the top, so strip the blank entry from the front of
+	# the @dirs array since the initial '/' it represents will now
+	# be supplied by the root node we return.
+	shift @dirs;
 	$dir = $root{$vol};
     } elsif ($toprel) {
 	$dir = $dir::top;
@@ -2399,24 +2508,31 @@ sub is_under {
     return undef;
 }
 
-# Return the relative path from the specified directory ($_[1])
-# to the object.  Return undef if this isn't underneath the
-# specified directory.
+# Return the relative path from the calling directory ($_[1])
+# to the object.  If the object is not under the directory, then
+# we return it as a top-relative or absolute path name.
 sub relpath {
-    my $dir = $_[0];
+    my ($dir, $obj) = @_;
     my @dirs;
-    while ($dir) {
-	if ($_[1] == $dir) {
+    my $o = $obj;
+    while ($o) {
+	if ($dir == $o) {
 	    if (@dirs < 2) {
 		return $dirs[0] || '';
 	    } else {
 		return File::Spec->catdir(@dirs);
 	    }
 	}
-	unshift(@dirs, $dir->{entry});
-	$dir = $dir->up;
+	unshift(@dirs, $o->{entry});
+	$o = $o->up;
     }
-    return undef;
+    # The object was not underneath the specified directory.
+    # Use the node's cached path, which is either top-relative
+    # (in which case we append '#' to the beginning) or
+    # absolute.
+    my $p = $obj->path;
+    $p = '#' . $p if ! File::Spec->file_name_is_absolute($p);
+    return $p;
 }
 
 # Return the path of the directory (file paths implemented
@@ -2672,11 +2788,16 @@ sub local {
     $self->{'local'};
 }
 
-# Return the entry name of the specified file
-# without the suffix
-sub base {
+# Return the entry name of the specified file with the specified
+# suffix appended.  Leave it untouched if the suffix is already there.
+# Differs from the addsuffix function, below, in that this strips
+# the existing suffix (if any) before appending the desired one.
+sub base_suf {
     my($entry) = $_[0]->{entry};
-    $entry =~ s/\.[^\.]*$//;
+    if ($entry !~ m/$_[1]$/) {
+	$entry =~ s/\.[^\.]*$//;
+	$entry .= $_[1];
+    }
     $entry;
 }
 
@@ -2875,6 +2996,7 @@ sub bind {
     $self->{builder} = $builder;
     push(@{$self->{sources}}, @sources);
     @{$self->{dep}} = () if ! defined $self->{dep};
+    $self->{conscript} = $priv::self->{script};
 }
 
 sub is_under {
@@ -2882,13 +3004,11 @@ sub is_under {
 }
 
 sub relpath {
-    my $dirpath = $_[0]->{dir}->relpath($_[1]);
-    if (! defined $dirpath) {
-	return undef;
-    } elsif (! $dirpath) {
-	return $_[0]->{entry};
+    my $dirpath = $_[0]->relpath($_[1]->{dir});
+    if (! $dirpath) {
+	return $_[1]->{entry};
     } else {
-	File::Spec->catfile($dirpath, $_[0]->{entry});
+	File::Spec->catfile($dirpath, $_[1]->{entry});
     }
 }
 
@@ -2972,8 +3092,6 @@ sub mkdir {
 
 # Signature package.
 package sig::hash;
-
-use vars qw( $called );
 
 use vars qw( $called );
 
@@ -3108,12 +3226,21 @@ sub select {
 # MD5-based signature package.
 package sig::md5;
 
-use MD5 1.6;
-
 use vars qw( $md5 );
 
 BEGIN {
-    $md5 = new MD5;
+    my $module;
+    my @md5_modules = qw(Digest::MD5 MD5);
+    for (@md5_modules) {
+	eval "use $_";
+	if (! $@) {
+	    $module = $_;
+	    last;
+	}
+    }
+    die "Cannot find any MD5 module from:  @md5_modules" if $@;
+
+    $md5 = new $module;
 }
 
 # Invalidate a cache entry.
@@ -3240,7 +3367,7 @@ Cons - A Software Construction System
 
 =head1 DESCRIPTION
 
-A guide and reference for version 2.1.2
+A guide and reference for version 2.2.0
 
 Copyright (c) 1996-2000 Free Software Foundation, Inc.
 
@@ -3306,7 +3433,7 @@ for each sub-directory of a build. This leads to complicated code, in which
 it is often unclear how a variable is set, or what effect the setting of a
 variable will have on the build as a whole. The make scripting language has
 gradually been extended to provide more possibilities, but these have
-largely served to clutter an already over extended language. Often, builds
+largely served to clutter an already overextended language. Often, builds
 are done in multiple passes in order to provide appropriate products from
 one directory to another directory. This represents a further increase in
 build complexity.
@@ -3370,7 +3497,7 @@ is a familiar one. Even if you don't happen to be a Perl programmer, it
 helps to know that Perl is basically just a simple declarative language,
 with a well-defined flow of control, and familiar semantics. It has
 variables that behave basically the way you would expect them to,
-subroutines, flow-of-control, and so on. There is no special syntax
+subroutines, flow of control, and so on. There is no special syntax
 introduced for Cons. The use of Perl as a scripting language simplifies
 the task of expressing the appropriate solution to the often complex
 requirements of a build.
@@ -3557,7 +3684,7 @@ containing a subsidiary F<Conscript> file it is including.  This behavior
 can be enabled for a build by specifying, in the top-level F<Construct>
 file:
 
-	Conscript_chdir 1;
+  Conscript_chdir 1;
 
 When enabled, Cons will change to the subsidiary F<Conscript> file's
 containing directory while reading in that file, and then change back
@@ -3566,10 +3693,9 @@ to the top-level directory once the file has been processed.
 It is expected that this behavior will become the default in some future
 version of Cons.  To prepare for this transition, builds that expect
 Cons to remain at the top of the build while it reads in a subsidiary
-F<Conscript> file are encouraged to explicitly disable this feature
-as follows:
+F<Conscript> file should explicitly disable this feature as follows:
 
-	Conscript_chdir 0;
+  Conscript_chdir 0;
 
 
 =head2 Relative, top-relative, and absolute file names
@@ -3585,29 +3711,41 @@ systems which use a back slash rather than a forward slash to name absolute
 paths.
 
 
+=head2 Using modules in build scripts
+
+You may pull modules into each F<Conscript> file using the normal Perl
+C<use> or C<require> statements:
+
+  use English;
+  require My::Module;
+
+Each C<use> or C<require> only affects the one F<Conscript> file in which
+it appears.  To use a module in multiple F<Conscript> files, you must
+put a C<use> or C<require> statement in each one that needs the module.
+
+
 =head2 Scope of variables
 
-Each F<Conscript> file, and also the top-level F<Construct> file, begins
-life in a separate Perl package. Except for the F<Construct> file, which
-gets some of the command line arguments, the symbol table for each script is
-empty. All of the variables that are set, therefore, are set by the script
-itself--not by some external script. Variables can be explicitly B<imported>
-by a script from its parent script. To import a variable, it must have been
-B<exported> by the parent and initialized (otherwise an error will
-occur). It is therefore possible to determine, from looking at a single
-script, exactly where each variable in that script is set.
+The top-level F<Construct> file and all F<Conscript> files begin life in
+a common, separate Perl package.  B<Cons> controls the symbol table for
+the package so that, the symbol table for each script is empty, except
+for the F<Construct> file, which gets some of the command line arguments.
+All of the variables that are set or used, therefore, are set by the
+script itself--not by some external script.
+
+Variables can be explicitly B<imported> by a script from its parent
+script. To import a variable, it must have been B<exported> by the parent
+and initialized (otherwise an error will occur).
 
 
 =head2 The Export command
 
 The C<Export> command is used as in the following example:
 
-
-
-  $ENV = new cons();
+  $env = new cons();
   $INCLUDE = "#export/include";
   $LIB = "#export/lib";
-  Export qw( ENV INCLUDE LIB );
+  Export qw( env INCLUDE LIB );
   Build qw( util/Conscript );
 
 The values of the simple variables mentioned in the C<Export> list will be
@@ -3620,12 +3758,10 @@ original exporting script. It's acceptable, however, to assign a new value
 to the exported scalar variable--that won't change the underlying variable
 referenced. This sequence, for example, is OK:
 
-
-
-  $ENV = new cons();
-  Export qw( ENV INCLUDE LIB );
+  $env = new cons();
+  Export qw( env INCLUDE LIB );
   Build qw( util/Conscript );
-  $ENV = new cons(CFLAGS => '-O');
+  $env = new cons(CFLAGS => '-O');
   Build qw( other/Conscript );
 
 It doesn't matter whether the variable is set before or after the C<Export>
@@ -3641,10 +3777,9 @@ Variables exported by the C<Export> command can be imported into subsidiary
 scripts by the C<Import> command. The subsidiary script always imports
 variables directly from the superior script. Consider this example:
 
+  Import qw( env INCLUDE );
 
-  Import qw( ENV INCLUDE );
-
-This is only legal if the parent script exported both C<$ENV> and
+This is only legal if the parent script exported both C<$env> and
 C<$INCLUDE>. It also must have given each of these variables values. It is
 OK for the subsidiary script to only import a subset of the exported
 variables (in this example, C<$LIB>, which was exported by the previous
@@ -3652,18 +3787,14 @@ example, is not imported).
 
 All the imported variables are automatically re-exported, so the sequence:
 
-
-
-  Import qw ( ENV INCLUDE );
+  Import qw ( env INCLUDE );
   Build qw ( beneath-me/Conscript );
 
-will supply both C<$ENV> and C<$INCLUDE> to the subsidiary file. If only
-C<$ENV> is to be exported, then the following will suffice:
+will supply both C<$env> and C<$INCLUDE> to the subsidiary file. If only
+C<$env> is to be exported, then the following will suffice:
 
-
-
-  Import qw ( ENV INCLUDE );
-  Export qw ( ENV );
+  Import qw ( env INCLUDE );
+  Export qw ( env );
   Build qw ( beneath-me/Conscript );
 
 Needless to say, the variables may be modified locally before invoking
@@ -4097,7 +4228,7 @@ building the derived files from the repository source:
 
   % rm world.c
   % cons -R /usr/src_only/repository hello
-  gcc -c /usr/src_only/world.c/repository -o world.o
+  gcc -c /usr/src_only/repository/world.c -o world.o
   ar r libworld.a world.o
   ar: creating libworld.a
   ranlib libworld.a
@@ -4631,7 +4762,7 @@ files. For example:
   Objects $env 'foo.c', 'bar.c';
 
 This will arrange to produce, if necessary, F<foo.o> and F<bar.o>. The
-command invoked is simply C<%CCOM>, which expands through substitution, to
+command invoked is simply C<%CCCOM>, which expands through substitution, to
 the appropriate external command required to build each object. We will
 explore the substitution rules further under the C<Command> method, below.
 
@@ -4861,12 +4992,12 @@ the F<test> directory:
 Any of the above pseudo variables may be followed immediately by one of
 the following suffixes to select a portion of the expanded path name:
 
-  C<:a>    the absolute path to the file name
-  C<:b>    the directory plus the file name stripped of any suffix
-  C<:d>    the directory
-  C<:f>    the file name
-  C<:s>    the file name suffix
-  C<:F>    the file name stripped of any suffix
+  :a    the absolute path to the file name
+  :b    the directory plus the file name stripped of any suffix
+  :d    the directory
+  :f    the file name
+  :s    the file name suffix
+  :F    the file name stripped of any suffix
 
 Continuing with the above example, C<%<:f> would expand to C<foo bar baz>,
 and C<%>:d> would expand to C<test>.
@@ -4875,14 +5006,20 @@ It is possible to programmatically rewrite part of the command by
 enclosing part of it between C<%[> and C<%]>.  This will call the
 construction variable named as the first word enclosed in the brackets
 as a Perl code reference; the results of this call will be used to
-replace the contents of the brackets in the command line.  For example:
+replace the contents of the brackets in the command line.  For example,
+given an existing input file named F<tgt.in>:
 
+  @keywords = qw(foo bar baz);
   $env = new cons(X_COMMA => sub { join(",", @_) });
-  Command $env 'tgt', qw(foo bar baz), "echo %[X_COMMA %<%] > %>"
+  Command $env 'tgt', 'tgt.in', qq(
+	echo '# Keywords: %[X_COMMA @keywords %]' > %>
+	cat %< >> %>
+  );
 
 This will execute:
 
-  echo foo,bar,baz > tgt
+  echo '# Keywords: foo,bar,baz' > tgt
+  cat tgt.in >> tgt
 
 After substitution occurs, strings of white space are converted into single
 blanks, and leading and trailing white space is eliminated. It is therefore
@@ -4911,6 +5048,38 @@ strings this way, you must either explicitly set up a dependency (with the
 C<Depends> method), or be sure that the command you are using is a system
 command which is expected to be available. If it isn't available, you will,
 of course, get an error.
+
+If any command (even one within a multi-line command) begins with
+C<[perl]>, the remainder of that command line will be evaluated by the
+running Perl instead of being forked by the shell.  If an error occurs
+in parsing the Perl or if the Perl expression returns 0 or undef, the
+command will be considered to have failed.  For example, here is a simple
+command which creates a file C<foo> directly from Perl:
+
+  $env = new cons();
+  Command $env 'foo',
+    qq([perl] open(FOO,'>foo');print FOO "hi\\n"; close(FOO); 1);
+
+Note that when the command is executed, you are in the same package as
+when the F<Construct> or F<Conscript> file was read, so you can call
+Perl functions you've defined in the same F<Construct> or F<Conscript>
+file in which the C<Command> appears:
+
+  $env = new cons();
+  sub create_file {
+	my $file = shift;
+	open(FILE, ">$file");
+	print FILE "hi\n";
+	close(FILE);
+	return 1;
+  }
+  Command $env 'foo', "[perl] &create_file('%>')";
+
+The Perl string will be used to generate the signature for the derived
+file, so if you change the string, the file will be rebuilt.  The contents
+of any subroutines you call, however, are not part of the signature,
+so if you modify a called subroutine such as C<create_file> above,
+the target will I<not> be rebuilt.  Caveat user.
 
 Cons normally prints a command before executing it.  This behavior is
 suppressed if the first character of the command is C<@>.  Note that
@@ -4965,20 +5134,20 @@ the specified source files. It is invoked as shown below:
 Under Unix, source files ending in F<.s> and F<.c> are currently
 supported, and will be compiled into a name of the same file ending
 in F<.o>. By default, all files are created by invoking the external
-command which results from expanding the C<CCOM> construction
+command which results from expanding the C<CCCOM> construction
 variable, with C<%E<lt>> and C<%E<gt>> set to the source and object
-files, respectively (see the C<Command> method for expansion details)
-. The variable C<CPPPATH> is also used when scanning source files for
+files, respectively (see the C<Command> method for expansion details).
+The variable C<CPPPATH> is also used when scanning source files for
 dependencies. This is a colon separated list of pathnames, and is also
 used to create the construction variable C<_IFLAGS,> which will contain
 the appropriate list of -C<I> options for the compilation. Any relative
 pathnames in C<CPPPATH> is interpreted relative to the directory in
 which the associated construction environment was created (absolute
 and top-relative names may also be used). This variable is used by
-C<CCOM>. The behavior of this command can be modified by changing any
-of the variables which are interpolated into C<CCOM>, such as C<CC>,
+C<CCCOM>. The behavior of this command can be modified by changing any
+of the variables which are interpolated into C<CCCOM>, such as C<CC>,
 C<CFLAGS>, and, indirectly, C<CPPPATH>. It's also possible to replace
-the value of C<CCOM>, itself. As a convenience, this file returns the
+the value of C<CCCOM>, itself. As a convenience, this file returns the
 list of object filenames.
 
 
@@ -5075,6 +5244,16 @@ This may be occasionally useful, especially in cases where no scanner exists
 (or is writable) for particular types of files. Normally, dependencies are
 calculated automatically from a combination of the explicit dependencies set
 up by the method invocation or by scanning source files.
+
+A set of identical dependencies for multiple targets may be specified
+using a reference to a list of targets. In Perl, a list reference can
+be created by enclosing a list in square brackets. Hence the following
+command:
+
+  Depends $env ['foo', 'bar'], 'input_file_1', 'input_file_2';
+
+specifies that both the F<foo> and F<bar> files depend on the listed
+input files.
 
 
 =head2 The C<Ignore> method
@@ -5465,8 +5644,12 @@ QuickScan is invoked as follows:
 The subroutine referenced by CODEREF is expected to return a list of
 filenames included directly by FILE. These filenames will, in turn, be
 scanned. The optional PATH argument supplies a lookup path for finding
-FILENAME and/or files returned by the user-supplied subroutine. The
-subroutine is called once for each line in the file, with $_ set to the
+FILENAME and/or files returned by the user-supplied subroutine.  The PATH
+may be a reference to an array of lookup-directory names, or a string of
+names separated by the system's separator character (':' on UNIX systems,
+';' on Windows NT).
+
+The subroutine is called once for each line in the file, with $_ set to the
 current line. If the subroutine needs to look at additional lines, or, for
 that matter, the entire file, then it may read them itself, from the
 filehandle SCAN. It may also terminate the loop, if it knows that no further

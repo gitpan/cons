@@ -39,6 +39,7 @@
 		<LI><A HREF="#a hierarchy of build scripts">A hierarchy of build scripts</A></LI>
 		<LI><A HREF="#the build command">The Build command</A></LI>
 		<LI><A HREF="#relative, toprelative, and absolute file names">Relative, top-relative, and absolute file names</A></LI>
+		<LI><A HREF="#using modules in build scripts">Using modules in build scripts</A></LI>
 		<LI><A HREF="#scope of variables">Scope of variables</A></LI>
 		<LI><A HREF="#the export command">The Export command</A></LI>
 		<LI><A HREF="#the import command">The Import command</A></LI>
@@ -157,7 +158,7 @@
 <P>
 <HR>
 <H1><A NAME="description">DESCRIPTION</A></H1>
-<P>A guide and reference for version 2.1.2</P>
+<P>A guide and reference for version 2.2.0</P>
 <P>Copyright (c) 1996-2000 Free Software Foundation, Inc.</P>
 <P>This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -215,7 +216,7 @@ for each sub-directory of a build. This leads to complicated code, in which
 it is often unclear how a variable is set, or what effect the setting of a
 variable will have on the build as a whole. The make scripting language has
 gradually been extended to provide more possibilities, but these have
-largely served to clutter an already over extended language. Often, builds
+largely served to clutter an already overextended language. Often, builds
 are done in multiple passes in order to provide appropriate products from
 one directory to another directory. This represents a further increase in
 build complexity.</P>
@@ -271,7 +272,7 @@ is a familiar one. Even if you don't happen to be a Perl programmer, it
 helps to know that Perl is basically just a simple declarative language,
 with a well-defined flow of control, and familiar semantics. It has
 variables that behave basically the way you would expect them to,
-subroutines, flow-of-control, and so on. There is no special syntax
+subroutines, flow of control, and so on. There is no special syntax
 introduced for Cons. The use of Perl as a scripting language simplifies
 the task of expressing the appropriate solution to the often complex
 requirements of a build.</P>
@@ -421,17 +422,16 @@ containing a subsidiary <EM>Conscript</EM> file it is including.  This behavior
 can be enabled for a build by specifying, in the top-level <EM>Construct</EM>
 file:</P>
 <PRE>
-        Conscript_chdir 1;</PRE>
+  Conscript_chdir 1;</PRE>
 <P>When enabled, Cons will change to the subsidiary <EM>Conscript</EM> file's
 containing directory while reading in that file, and then change back
 to the top-level directory once the file has been processed.</P>
 <P>It is expected that this behavior will become the default in some future
 version of Cons.  To prepare for this transition, builds that expect
 Cons to remain at the top of the build while it reads in a subsidiary
-<EM>Conscript</EM> file are encouraged to explicitly disable this feature
-as follows:</P>
+<EM>Conscript</EM> file should explicitly disable this feature as follows:</P>
 <PRE>
-        Conscript_chdir 0;</PRE>
+  Conscript_chdir 0;</PRE>
 <P>
 <H2><A NAME="relative, toprelative, and absolute file names">Relative, top-relative, and absolute file names</A></H2>
 <P>You may have noticed that the file names specified to the Build command are
@@ -444,24 +444,34 @@ then it is considered to be an absolute pathname. This is true even on
 systems which use a back slash rather than a forward slash to name absolute
 paths.</P>
 <P>
+<H2><A NAME="using modules in build scripts">Using modules in build scripts</A></H2>
+<P>You may pull modules into each <EM>Conscript</EM> file using the normal Perl
+<CODE>use</CODE> or <CODE>require</CODE> statements:</P>
+<PRE>
+  use English;
+  require My::Module;</PRE>
+<P>Each <CODE>use</CODE> or <CODE>require</CODE> only affects the one <EM>Conscript</EM> file in which
+it appears.  To use a module in multiple <EM>Conscript</EM> files, you must
+put a <CODE>use</CODE> or <CODE>require</CODE> statement in each one that needs the module.</P>
+<P>
 <H2><A NAME="scope of variables">Scope of variables</A></H2>
-<P>Each <EM>Conscript</EM> file, and also the top-level <EM>Construct</EM> file, begins
-life in a separate Perl package. Except for the <EM>Construct</EM> file, which
-gets some of the command line arguments, the symbol table for each script is
-empty. All of the variables that are set, therefore, are set by the script
-itself--not by some external script. Variables can be explicitly <STRONG>imported</STRONG>
-by a script from its parent script. To import a variable, it must have been
-<STRONG>exported</STRONG> by the parent and initialized (otherwise an error will
-occur). It is therefore possible to determine, from looking at a single
-script, exactly where each variable in that script is set.</P>
+<P>The top-level <EM>Construct</EM> file and all <EM>Conscript</EM> files begin life in
+a common, separate Perl package.  <STRONG>Cons</STRONG> controls the symbol table for
+the package so that, the symbol table for each script is empty, except
+for the <EM>Construct</EM> file, which gets some of the command line arguments.
+All of the variables that are set or used, therefore, are set by the
+script itself--not by some external script.</P>
+<P>Variables can be explicitly <STRONG>imported</STRONG> by a script from its parent
+script. To import a variable, it must have been <STRONG>exported</STRONG> by the parent
+and initialized (otherwise an error will occur).</P>
 <P>
 <H2><A NAME="the export command">The Export command</A></H2>
 <P>The <CODE>Export</CODE> command is used as in the following example:</P>
 <PRE>
-  $ENV = new cons();
+  $env = new cons();
   $INCLUDE = &quot;#export/include&quot;;
   $LIB = &quot;#export/lib&quot;;
-  Export qw( ENV INCLUDE LIB );
+  Export qw( env INCLUDE LIB );
   Build qw( util/Conscript );</PRE>
 <P>The values of the simple variables mentioned in the <CODE>Export</CODE> list will be
 squirreled away by any subsequent <CODE>Build</CODE> commands. The <CODE>Export</CODE> command
@@ -473,10 +483,10 @@ original exporting script. It's acceptable, however, to assign a new value
 to the exported scalar variable--that won't change the underlying variable
 referenced. This sequence, for example, is OK:</P>
 <PRE>
-  $ENV = new cons();
-  Export qw( ENV INCLUDE LIB );
+  $env = new cons();
+  Export qw( env INCLUDE LIB );
   Build qw( util/Conscript );
-  $ENV = new cons(CFLAGS =&gt; '-O');
+  $env = new cons(CFLAGS =&gt; '-O');
   Build qw( other/Conscript );</PRE>
 <P>It doesn't matter whether the variable is set before or after the <CODE>Export</CODE>
 command. The important thing is the value of the variable at the time the
@@ -489,21 +499,21 @@ mention all the variables you wish to export on each <CODE>Export</CODE> command
 scripts by the <CODE>Import</CODE> command. The subsidiary script always imports
 variables directly from the superior script. Consider this example:</P>
 <PRE>
-  Import qw( ENV INCLUDE );</PRE>
-<P>This is only legal if the parent script exported both <CODE>$ENV</CODE> and
+  Import qw( env INCLUDE );</PRE>
+<P>This is only legal if the parent script exported both <CODE>$env</CODE> and
 <CODE>$INCLUDE</CODE>. It also must have given each of these variables values. It is
 OK for the subsidiary script to only import a subset of the exported
 variables (in this example, <CODE>$LIB</CODE>, which was exported by the previous
 example, is not imported).</P>
 <P>All the imported variables are automatically re-exported, so the sequence:</P>
 <PRE>
-  Import qw ( ENV INCLUDE );
+  Import qw ( env INCLUDE );
   Build qw ( beneath-me/Conscript );</PRE>
-<P>will supply both <CODE>$ENV</CODE> and <CODE>$INCLUDE</CODE> to the subsidiary file. If only
-<CODE>$ENV</CODE> is to be exported, then the following will suffice:</P>
+<P>will supply both <CODE>$env</CODE> and <CODE>$INCLUDE</CODE> to the subsidiary file. If only
+<CODE>$env</CODE> is to be exported, then the following will suffice:</P>
 <PRE>
-  Import qw ( ENV INCLUDE );
-  Export qw ( ENV );
+  Import qw ( env INCLUDE );
+  Export qw ( env );
   Build qw ( beneath-me/Conscript );</PRE>
 <P>Needless to say, the variables may be modified locally before invoking
 <CODE>Build</CODE> on the subsidiary script.</P>
@@ -887,7 +897,7 @@ building the derived files from the repository source:</P>
 <PRE>
   % rm world.c
   % cons -R /usr/src_only/repository hello
-  gcc -c /usr/src_only/world.c/repository -o world.o
+  gcc -c /usr/src_only/repository/world.c -o world.o
   ar r libworld.a world.o
   ar: creating libworld.a
   ranlib libworld.a
@@ -1345,7 +1355,7 @@ files. For example:</P>
 <PRE>
   Objects $env 'foo.c', 'bar.c';</PRE>
 <P>This will arrange to produce, if necessary, <EM>foo.o</EM> and <EM>bar.o</EM>. The
-command invoked is simply <CODE>%CCOM</CODE>, which expands through substitution, to
+command invoked is simply <CODE>%CCCOM</CODE>, which expands through substitution, to
 the appropriate external command required to build each object. We will
 explore the substitution rules further under the <CODE>Command</CODE> method, below.</P>
 <P>The construction variables are also used for other purposes. For example,
@@ -1538,25 +1548,31 @@ the <EM>test</EM> directory:</P>
 <P>Any of the above pseudo variables may be followed immediately by one of
 the following suffixes to select a portion of the expanded path name:</P>
 <PRE>
-  C&lt;:a&gt;    the absolute path to the file name
-  C&lt;:b&gt;    the directory plus the file name stripped of any suffix
-  C&lt;:d&gt;    the directory
-  C&lt;:f&gt;    the file name
-  C&lt;:s&gt;    the file name suffix
-  C&lt;:F&gt;    the file name stripped of any suffix</PRE>
+  :a    the absolute path to the file name
+  :b    the directory plus the file name stripped of any suffix
+  :d    the directory
+  :f    the file name
+  :s    the file name suffix
+  :F    the file name stripped of any suffix</PRE>
 <P>Continuing with the above example, <CODE>%&lt;:f</CODE> would expand to <CODE>foo bar baz</CODE>,
 and <CODE>%</CODE>:d&gt; would expand to <CODE>test</CODE>.</P>
 <P>It is possible to programmatically rewrite part of the command by
 enclosing part of it between <CODE>%[</CODE> and <CODE>%]</CODE>.  This will call the
 construction variable named as the first word enclosed in the brackets
 as a Perl code reference; the results of this call will be used to
-replace the contents of the brackets in the command line.  For example:</P>
+replace the contents of the brackets in the command line.  For example,
+given an existing input file named <EM>tgt.in</EM>:</P>
 <PRE>
+  @keywords = qw(foo bar baz);
   $env = new cons(X_COMMA =&gt; sub { join(&quot;,&quot;, @_) });
-  Command $env 'tgt', qw(foo bar baz), &quot;echo %[X_COMMA %&lt;%] &gt; %&gt;&quot;</PRE>
+  Command $env 'tgt', 'tgt.in', qq(
+        echo '# Keywords: %[X_COMMA @keywords %]' &gt; %&gt;
+        cat %&lt; &gt;&gt; %&gt;
+  );</PRE>
 <P>This will execute:</P>
 <PRE>
-  echo foo,bar,baz &gt; tgt</PRE>
+  echo '# Keywords: foo,bar,baz' &gt; tgt
+  cat tgt.in &gt;&gt; tgt</PRE>
 <P>After substitution occurs, strings of white space are converted into single
 blanks, and leading and trailing white space is eliminated. It is therefore
 not possible to introduce variable length white space in strings passed into
@@ -1581,6 +1597,35 @@ strings this way, you must either explicitly set up a dependency (with the
 <CODE>Depends</CODE> method), or be sure that the command you are using is a system
 command which is expected to be available. If it isn't available, you will,
 of course, get an error.</P>
+<P>If any command (even one within a multi-line command) begins with
+<CODE>[perl]</CODE>, the remainder of that command line will be evaluated by the
+running Perl instead of being forked by the shell.  If an error occurs
+in parsing the Perl or if the Perl expression returns 0 or undef, the
+command will be considered to have failed.  For example, here is a simple
+command which creates a file <CODE>foo</CODE> directly from Perl:</P>
+<PRE>
+  $env = new cons();
+  Command $env 'foo',
+    qq([perl] open(FOO,'&gt;foo');print FOO &quot;hi\\n&quot;; close(FOO); 1);</PRE>
+<P>Note that when the command is executed, you are in the same package as
+when the <EM>Construct</EM> or <EM>Conscript</EM> file was read, so you can call
+Perl functions you've defined in the same <EM>Construct</EM> or <EM>Conscript</EM>
+file in which the <CODE>Command</CODE> appears:</P>
+<PRE>
+  $env = new cons();
+  sub create_file {
+        my $file = shift;
+        open(FILE, &quot;&gt;$file&quot;);
+        print FILE &quot;hi\n&quot;;
+        close(FILE);
+        return 1;
+  }
+  Command $env 'foo', &quot;[perl] &amp;create_file('%&gt;')&quot;;</PRE>
+<P>The Perl string will be used to generate the signature for the derived
+file, so if you change the string, the file will be rebuilt.  The contents
+of any subroutines you call, however, are not part of the signature,
+so if you modify a called subroutine such as <CODE>create_file</CODE> above,
+the target will <EM>not</EM> be rebuilt.  Caveat user.</P>
 <P>Cons normally prints a command before executing it.  This behavior is
 suppressed if the first character of the command is <CODE>@</CODE>.  Note that
 you may need to separate the <CODE>@</CODE> from the command name or escape it to
@@ -1626,20 +1671,20 @@ the specified source files. It is invoked as shown below:</P>
 <P>Under Unix, source files ending in <EM>.s</EM> and <EM>.c</EM> are currently
 supported, and will be compiled into a name of the same file ending
 in <EM>.o</EM>. By default, all files are created by invoking the external
-command which results from expanding the <CODE>CCOM</CODE> construction
+command which results from expanding the <CODE>CCCOM</CODE> construction
 variable, with <A HREF="#item_%<"><CODE>%&lt;</CODE></A> and <A HREF="#item_%>"><CODE>%&gt;</CODE></A> set to the source and object
-files, respectively (see the <CODE>Command</CODE> method for expansion details)
-. The variable <CODE>CPPPATH</CODE> is also used when scanning source files for
+files, respectively (see the <CODE>Command</CODE> method for expansion details).
+The variable <CODE>CPPPATH</CODE> is also used when scanning source files for
 dependencies. This is a colon separated list of pathnames, and is also
 used to create the construction variable <CODE>_IFLAGS,</CODE> which will contain
 the appropriate list of -<CODE>I</CODE> options for the compilation. Any relative
 pathnames in <CODE>CPPPATH</CODE> is interpreted relative to the directory in
 which the associated construction environment was created (absolute
 and top-relative names may also be used). This variable is used by
-<CODE>CCOM</CODE>. The behavior of this command can be modified by changing any
-of the variables which are interpolated into <CODE>CCOM</CODE>, such as <CODE>CC</CODE>,
+<CODE>CCCOM</CODE>. The behavior of this command can be modified by changing any
+of the variables which are interpolated into <CODE>CCCOM</CODE>, such as <CODE>CC</CODE>,
 <CODE>CFLAGS</CODE>, and, indirectly, <CODE>CPPPATH</CODE>. It's also possible to replace
-the value of <CODE>CCOM</CODE>, itself. As a convenience, this file returns the
+the value of <CODE>CCCOM</CODE>, itself. As a convenience, this file returns the
 list of object filenames.</P>
 <P>
 <H2><A NAME="the program method">The <CODE>Program</CODE> method</A></H2>
@@ -1719,6 +1764,14 @@ target.  It is invoked as follows:</P>
 (or is writable) for particular types of files. Normally, dependencies are
 calculated automatically from a combination of the explicit dependencies set
 up by the method invocation or by scanning source files.</P>
+<P>A set of identical dependencies for multiple targets may be specified
+using a reference to a list of targets. In Perl, a list reference can
+be created by enclosing a list in square brackets. Hence the following
+command:</P>
+<PRE>
+  Depends $env ['foo', 'bar'], 'input_file_1', 'input_file_2';</PRE>
+<P>specifies that both the <EM>foo</EM> and <EM>bar</EM> files depend on the listed
+input files.</P>
 <P>
 <H2><A NAME="the ignore method">The <CODE>Ignore</CODE> method</A></H2>
 <P>The <CODE>Ignore</CODE> method allows you to ignore explicitly dependencies that
@@ -2054,8 +2107,11 @@ file and environment.</P>
 <P>The subroutine referenced by CODEREF is expected to return a list of
 filenames included directly by FILE. These filenames will, in turn, be
 scanned. The optional PATH argument supplies a lookup path for finding
-FILENAME and/or files returned by the user-supplied subroutine. The
-subroutine is called once for each line in the file, with $_ set to the
+FILENAME and/or files returned by the user-supplied subroutine.  The PATH
+may be a reference to an array of lookup-directory names, or a string of
+names separated by the system's separator character (':' on UNIX systems,
+';' on Windows NT).</P>
+<P>The subroutine is called once for each line in the file, with $_ set to the
 current line. If the subroutine needs to look at additional lines, or, for
 that matter, the entire file, then it may read them itself, from the
 filehandle SCAN. It may also terminate the loop, if it knows that no further
