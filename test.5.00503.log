@@ -1,4 +1,4 @@
-Tests Started at [Tue Jun 6 18:09:52 EDT 2000] on Linux pss-pc.eng.fore.com 2.2.14-5.0smp #1 SMP Tue Mar 7 21:01:40 EST 2000 i686 unknown
+Tests Started at [Wed Jun 14 18:30:22 EDT 2000] on Linux pss-pc.eng.fore.com 2.2.14-5.0smp #1 SMP Tue Mar 7 21:01:40 EST 2000 i686 unknown
 ------------
 cons-test.pl:  perl5.00503 -w t/t0001.t
 PASSED
@@ -239,5 +239,5 @@ PASSED
 
 cons-test.pl:  'cons' passed all 118 tests.
 ------------
-Tests completed [Tue Jun 6 18:13:03 EDT 2000]
+Tests completed [Wed Jun 14 18:33:17 EDT 2000]
 ------------

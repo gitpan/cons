@@ -1,7 +1,27 @@
 Cons is a software construction system. A description appears under
 "Cons 1.0", below.
 
-$Id: CHANGES,v 1.48 2000/06/02 06:38:48 knight Exp $
+$Id: CHANGES,v 1.52 2000/06/14 22:33:01 rv Exp $
+
+Cons 2.0.1
+**********
+
+- Fix a QuickScan regression:  CODREFs that return arrays broke
+  because the calling context changed from array to scalar.  Keep it
+  in array context and use grep to weed out null entries.
+
+- The map{} function SplitPath returned was using @_, not $_, so it
+  would return multiple copies of the whole list, thereby only
+  working for a single argument.
+
+- Fix the cons.bat file copyright comments. (pointed out by
+  Juan Altmayer Pizzorno <juan@port25.com>)
+
+- Add CXX* default rules for win32. (pointed out by
+  Juan Altmayer Pizzorno <juan@port25.com>)
+
+- Documentation fix in "Adding new methods" section. (pointed out
+  by Juan Altmayer Pizzorno <juan@port25.com>)
 
 Cons 2.0
 ********

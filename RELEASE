@@ -1,7 +1,18 @@
-$Id: RELEASE,v 1.13 2000/05/25 16:23:07 rv Exp $
+$Id: RELEASE,v 1.15 2000/06/14 22:33:01 rv Exp $
 
-Cons 2.0 ($Id: RELEASE,v 1.13 2000/05/25 16:23:07 rv Exp $)
-********************************************************
+Cons 2.0.1 ($Id: RELEASE,v 1.15 2000/06/14 22:33:01 rv Exp $)
+*************************************************************
+
+This release fixes a couple of bugs found *just after* 2.0
+was released.
+
+It affects users of QuickScan and SplitPath, and win32 users
+building C++ objects with cons.
+
+See CHANGES for details.
+
+Cons 2.0
+********
 
 This is a stable release of Cons. The development release was
 named 1.8b2, but the stable release has taken a new version
