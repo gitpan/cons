@@ -1,0 +1,63 @@
+# $Id: TODO,v 1.27 2000/05/12 11:35:26 knight Exp $
+
+Fix signature documentation
+	Johan Holmberg 27 January 2000
+	(lots of other mail with Subject:  "Signature confusion")
+
+file names with spaces in them
+
+commands with spaces in them
+
+be able to put %'s in command lines
+	Gary Oberbrunner <garyo@genarts.com> 4 November 1998
+
+additional methods:
+
+	cons::SharedLibrary method?
+		Greg Spencer 4 November 1999
+
+	cons::Yacc method?
+		Wayne Scott 24 January 2000
+
+	cons::Java and cons::Jar methods?
+		Damien Neil 19 April 2000
+
+Finish (?) making Cons "perl -w" clean
+
+Be able to show why a target was built ("out of date w.r.t. to file X")
+	Gary Oberbrunner <garyo@genarts.com> 18 April 1998
+
+Suffix rules (like make %.foo : %.bar)
+
+Separate into plug-in modules for:
+	languages
+	compiler/linker subsystem
+	OS (environment variables, path transformations?)
+
+Be able to "use English" in Construct/Conscript files
+	Bob Sidebotham 6 May 1998
+
+Break "package script" into separate packages for each script
+	Jochen Schwarze <schwarze@isa.de> 6 May 1998
+
+Target aliases
+	Steven Knight <knight@baldmt.com> 12 April 1999
+
+Filename globbing?  [controversial issue]
+
+Case-insensitive file names (for Windows NT, others?)
+
+Content-based file:  build every time, then compute MD5 checksum on result
+	Brad Garcia 16 December 1999
+	Wayne Scott 25 January 2000
+
+Use Digest::MD5 instead of MD5.
+
+
+
+Integrate the FreeBSD ports packaging into the normal build.
+Create and distribute an RPM package.  Debian, too...?
+
+Redesign web site.
+
+Archive mailing list (use hypermail).

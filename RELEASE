@@ -1,11 +1,23 @@
-$Id: //depot/proj/cons/src/RELEASE#11 $
+$Id: RELEASE,v 1.13 2000/05/25 16:23:07 rv Exp $
 
-Cons 1.7 ($Id: //depot/proj/cons/src/RELEASE#11 $)
+Cons 2.0 ($Id: RELEASE,v 1.13 2000/05/25 16:23:07 rv Exp $)
 ********************************************************
 
-This is a stable release of Cons.
+This is a stable release of Cons. The development release was
+named 1.8b2, but the stable release has taken a new version
+number, 2.0 (see below).
 
-This release contains one documentation update, and three feature
-updates. Please see CHANGES for details.
+The major achievements in this release are so many that it doesn't
+make much sense in duplicating the information already available
+in the CHANGES file. Please see CHANGES for details.
+
+I would generally like to thank all the contributors to this release
+specifically like to thank Steven Knight for all the effort that
+he has put in to making this release possible.
+
+I would also like to thank the Marconi Communications (formerly FORE Systems)
+management for having released `cons' under the GNU General Public License
+(GPL). The version number change was to mark the new beginning of `cons'
+as a GPL'd program.
 
 Rajesh Vaidheeswarran

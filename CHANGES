@@ -1,7 +1,128 @@
 Cons is a software construction system. A description appears under
 "Cons 1.0", below.
 
-$Id: //depot/proj/cons/src/CHANGES#12 $
+$Id: CHANGES,v 1.48 2000/06/02 06:38:48 knight Exp $
+
+Cons 2.0
+********
+
+- Release Version of 1.8b2 (see 1.8b2 for all the changes)
+
+- Redo the copyright to be GNU General Public License.
+
+- Integrate the tests from the cons-test suite into the cons release,
+  creating separate tar files with and without the tests.
+
+Cons 1.8b2
+**********
+Contributions from Wayne Scott <wscott@ichips.intel.com>
+
+- Create subdirectories in the Cache directory if they don't already exist.
+
+- Don't match #include delimiters in comments on the same line.
+
+- Prevent scan::quickscan::scan from adding null entries to its
+  include-file list.
+
+Contributions from Damien Neill <neild@segasoft.com>
+
+- An initial '@' on a command line suppresses its printing (a la make).
+
+- Make Cons realize that topdir is part of the file system, allowing
+  building/installing in directories more than one level up.
+
+- Add support for rewriting portions of the command line enclosed by
+  %[-%] by passing them to a named code ref in the Cons environment.
+
+- Add a -t flag to walk up the directory hierarchy looking for a
+  Construct file, allowing invocation from child directories.
+  (Contributed with Greg Spencer.)
+
+Contributions from Brad Garcia <bgarcia@home.com>
+
+- Make the default environment '%LINK => '%CXX', which in turn
+  transparently maps to '%CC' for anyone not using C++.
+
+Contributions from Greg Spencer <greg_spencer@acm.org>
+
+- Add support for %:b, %:s, %:F and %:a suffixes on pseudo-variables.
+
+- Add Win32 default environment overrides for Microsoft VC++ 6.0.
+
+- Add a -t flag to walk up the directory hierarchy looking for a
+  Construct file, allowing invocation from child directories.
+  (Contributed with Damien Neill.)   Add hooks to builds an associated
+  Linked subdirectory if -t is invoked from a source subdirectory.
+
+- Fix futil::install (and the other futil methods) so they warn,
+  not die, and return failure on error.
+
+- Add a Precious method to suppress unlinking a file before building.
+
+Contributions from Eric Shienbrood <ers@wildfire.com>
+
+- Fix the Objects method to return path names relative to the Conscript
+  file.
+
+Contributions from Johan Holmberg <holmberg@iar.se>
+
+- Bug fixes in new File::Spec logic for incorrect use of Boolean tests
+  instead of string comparisons against ''.
+
+- Performance optimizations:  fix caching values in dir::is_linked
+  and futil::mkdir methods.
+
+- CPPPATH as an array ref wasn't properly expanding %-variables,
+  causing missed dependencies.
+
+Contributions from Gary Oberbrunner <garyo@genarts.com>
+
+- Have -d print the dependencies in-line with build.  Identify
+  what's a Target and what's a dependency we're Checking.
+
+Contributions from Steven Knight <knight@baldmt.com>
+
+- Rewrite all path name manipulation using File::Spec so we're as
+  portable as possible (at least between UNIX and NT).  Add support
+  for multiple file system volumes through a hash of $root nodes.
+
+- Due to incompatibility problems with some versions of File::Spec
+  on some versions of Perl, create our own internal File::Spec class with
+  methods cut-and-pasted from the real module, so people don't have to
+  install an external File::Spec.
+
+- Rewrite "options" routine; now hash-driven for speed and readability.
+
+- Let Default be called more than once.  Document it.
+
+- Rewrite the dir::lookup and dir::lookupdir methods to avoid changing
+  a file node into a dir node if the names match.  This was causing "Can't
+  locate object method" errors.  We now enforce a distinction between the
+  two node types, so add a dir::lookupfile and dir::lookupdir methods and
+  change calls as appropriate.  If someone tries to use a dir as a file
+  or vice versa, die and report the error with info about what's wrong,
+  where we detected the conflict, and where the node was created.  If a
+  dir was created as a file via "FilePath," change it to a dir (preserve
+  old behavior), but warn them that they should use "DirPath" instead.
+  Add an empty 'entry' subclass for nodes which we don't yet know are
+  files or directories.
+  (Bug reported by Eric Shienbrood.)
+
+- Have srcsig return a '' signature, not die, if the file can't be read.
+
+- Fix a bunch of perl -w warnings.  There are still a few warnings left.
+
+- Replace the hard-coded global FLAG_CHARACTER and LIB_FLAG_PREFIX
+  values with INCDIRPREFIX and LIBDIRPREFIX values in the Cons
+  environment, so people can simultaneously use multiple compilers/
+  linkers with different calling conventions.
+  (Bug reported by Johan Holmberg.)
+
+- Documentation cleanup and updates.
+
+- Minor changes to make sure Cons still executes under Perl 5.003.
+  Expand the testing to include Cons under Perl versions 5.00[345]
+  as well as 5.6.0.
 
 Cons 1.7
 ********

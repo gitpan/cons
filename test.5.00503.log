@@ -1,0 +1,243 @@
+Tests Started at [Tue Jun 6 18:09:52 EDT 2000] on Linux pss-pc.eng.fore.com 2.2.14-5.0smp #1 SMP Tue Mar 7 21:01:40 EST 2000 i686 unknown
+------------
+cons-test.pl:  perl5.00503 -w t/t0001.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0002.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0003.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0004.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0005.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0006.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0007.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0008.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0009.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0010.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0011.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0012.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0013.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0014.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0015.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0016.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0017.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0018.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0019.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0020.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0021.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0022.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0023.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0024.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0025.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0026.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0027.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0028.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0029.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0030.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0031.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0032.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0033.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0034.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0035.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0036.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0037.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0038.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0039.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0040.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0041.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0042.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0043.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0044.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0045.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0046.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0047.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0048.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0049.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0050.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0051.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0052.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0053.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0054.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0055.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0056.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0057.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0058.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0059.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0060.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0061.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0062.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0063.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0064.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0065.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0066.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0067.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0068.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0069.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0070.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0071.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0101.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0102.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0103.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0104.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0105.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0106.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0107.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0108.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0109.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0110.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0111.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0112.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0113.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0114.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0115.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0116.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0117.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0118.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0119.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0120.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0121.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0122.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0123.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0124.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0125.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0126.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0127.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0128.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0129.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0130.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0131.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0132.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0133.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0134.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0135.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0136.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0137.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0138.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0139.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0140.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0141.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0142.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0143.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0144.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0145.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0146.t
+PASSED
+cons-test.pl:  perl5.00503 -w t/t0147.t
+PASSED
+
+cons-test.pl:  'cons' passed all 118 tests.
+------------
+Tests completed [Tue Jun 6 18:13:03 EDT 2000]
+------------

@@ -1,8 +1,17 @@
-$Id: //depot/proj/cons/src/README#4 $
+$Id: README,v 1.6 2000/06/06 19:15:55 rv Exp $
 
-This is a Perl-based make replacement, but does not provide make
-compatibility. It has a number of powerful capabilities not found in other
-software construction systems, including make.
+Cons is a Perl-based make replacement.  It is not compatible with make,
+but has a number of powerful capabilities not found in other software
+construction systems, including make.
+
+Cons is distributed in two different packages, one with a full regression
+test suite (cons-plus-test-$version.tgz) and the other without
+(cons-$version.tgz).  There is no difference between the copies of
+cons in the two packages.  Most users should only need the base package
+without the test suite.  The package with the test suite is recommended
+for people who are planning to add new features to cons and want to make
+sure they don't break existing functionality, or who want to verify that
+cons works correctly on their platform.
 
 You will need Perl 5.002 or better and the Perl MD5 Extension
 (MD5-1.6.tar.gz or greater), available from CPAN.
@@ -12,8 +21,8 @@ use on versions of FreeBSD, Linux, SunOS, Solaris, HPUX, AIX, IRIX and NT.
 
 Documentation is supplied in POD format (thanks to Ulrich Pfiefer).
 
-A cons discussion group, cons-discuss@eng.fore.com, has been created.  If
-you wish to subscribe, send mail to cons-discuss-request@eng.fore.com with
+A cons discussion group, cons-discuss@gnu.org, has been created.  If
+you wish to subscribe, send mail to cons-discuss-request@gnu.org with
 the word "subscribe" in the BODY of the message. Please send all comments,
 requests, complaints, etc. to the mailing list.
 

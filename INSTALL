@@ -1,19 +1,26 @@
-$Id: //depot/proj/cons/src/INSTALL#5 $
+$Id: INSTALL,v 1.9 2000/06/06 20:58:42 rv Exp $
 
 This cons distribution contains the following files:
 
-INSTALL	  - This file.
-CHANGES	  - Change log for cons.
-README	  - Explanation of software.
-RELEASE	  - Release Notes for current distribution.
-cons	  - The cons program
-cons.bat  - cons as an MS-DOS batch file.
-cons.1	  - A nroff-formatted manual page documentation of cons.
-cons.html - HTML formatted cons documentation.
-test.log  - The log file from a test of cons under the cons-test suite.
+CHANGES		- Change log for cons.
+COPYING		- The GNU General Public License under which cons is released.
+INSTALL		- This file.
+README		- Explanation of software.
+RELEASE		- Release Notes for current distribution.
+TODO		- The list of things to do with cons.
+cons		- The cons program
+cons.1		- A nroff-formatted manual page documentation of cons.
+cons.bat	- cons as an MS-DOS batch file.
+cons.html	- HTML formatted cons documentation.
+test.*.log	- Log file(s) from regression tests of cons with various
+		  versions of Perl.
 
-To use cons, install the 'cons' program to a location where you other
-binaries, like /usr/local/bin
+This distribution may optionally contain a test/ subdirectory containing
+the regression test suite for cons.  See test/README for details about
+its contents.
+
+To use cons, simply copy the `cons' program to a location where you keep
+other executable binaries or scripts, like /usr/local/bin.
 
 Win-NT users can execute the cons program in 2 ways:
 
