@@ -1,7 +1,103 @@
 Cons is a software construction system. A description appears under
 "Cons 1.0", below.
 
-$Id: CHANGES,v 1.101.2.1 2000/11/17 05:39:08 knight Exp $
+$Id: CHANGES,v 1.127 2001/05/25 14:27:29 knight Exp $
+
+Cons 2.3.0
+**********
+
+- Require Perl 5.003.
+
+- Add a method `DefaultRules' to allow the user to set explicitly
+  the default construction variables.
+
+- Add a method `RuleSet' to allow the user to fetch default construction
+  variables (unix or msvc) for a given platform. This helps Windows users
+  who do not have the MSVC compiler to have sensible defaults for
+  compilers such as gcc.
+
+- Multiple commands can now be an array reference instead of being
+  newline-terminated.
+
+- Suppress -I and -L options for local or repository directories
+  that don't exist.
+  (Based on work by Dean Roehrich.)
+
+- Document %(-%).  Clarify QuickScan documentation.
+  (Based on work by Tony Kolarik.)
+
+- Expand %LIBS so it can interpolate other construction variables.
+  (Bug reported by David Sanderson.)
+
+- Allow multiple single-character command-line flags to be concatenated.
+
+- Allow multiple -q options to make the build quieter.
+  (Based on work by Alex Jacques.)
+
+- Undefined values passed to the internal _Objects method would generate
+  errors.  Remove undefined values from the list, collecting a lot of
+  common calling logic in one place inside the method.
+  (Bug reported by Allan Stokes.)
+
+- Refactor the build::* classes to extract the command-specific
+  portions into a new action::command class. This allows us to collect
+  all of the command-line manipulation in one place, and creates new
+  action::command::{unix,win32} subclasses to handle execution
+  differences without an "if ($main::_WIN32)" test each time.
+
+- Add EXPERIMENTAL support for using Perl code references to build
+  targets.  The code works, but we can't (yet) generate signatures for
+  Perl code to detect when a change requires a target be rebuilt.
+  Lots of comments detailing the underlying issues.
+
+- Document the current state of using Perl code references to build
+  targets, to encourage people to experiment with it and possibly solve
+  some issues.  Use this as an occasion to reorganize a lot of the
+  documentation about command-line strings and variable expansion, which
+  had gotten thrown into the overly-long description of the Command
+  method.
+
+- Put the CVS Id string and version number in (internal) Perl variables
+  to help others working on extending the latest CVS checkout.
+
+- Update documentation to mention you can use #include "..." with
+  Repository so long as the code that uses #include "..." stays in
+  the Repository and is not modified locally.
+
+- Add a -S option that allows specification of a signature-calculation
+  package, and a sig::debug package that serves as a factory for
+  sig::*::debug packages. This allows debugging of MD5 signatures by
+  specifying "-S md5::debug", without having to uncomment lines of code.
+
+- Use the Digest::Perl::MD5 module if it's available, but prefer
+  Digest::MD5 or MD5 since they're compiled and faster.
+
+- Add configurable support for content-based derived-file signatures
+  through a SourceSignature method and SIGNATURE construction
+  variables.
+  (Based on work by Wayne Scott.)
+
+Contributions from Alex Jacques <ajacques@morphics.com>
+
+- Fix an unclosed batch label in cons.bat which caused an error
+  message on WIN32 systems.
+
+Contributions from Gary Oberbrunner <garyo@genarts.com>
+
+- Add an AfterBuild method to execute perl code after a file has
+  been built or evaluated as up-to-date.
+
+Contributions from Johan Holmberg <holmberg@iar.se>
+
+- Fix two internal method calls that still used indirect object syntax,
+  preventing the "cons" class from being cleanly sub-classed.
+
+- Two small syntax changes (remove a spurious quote, separate a $ from a
+  closing single quote) so cperl-mode will work with the cons.pl source.
+
+- Add support for INCDIRSUFFIX and LIBDIRSUFFIX construction variables,
+  mainly to accomodate compilers and linkers that need a trailing '/'
+  on directory options.
 
 Cons 2.2.0
 **********

@@ -1,6 +1,6 @@
 @rem = '--*-PERL-*--';
 @rem = '';
-@rem = 'Copyright (C) 1996-2000 Free Software Foundation, Inc.';
+@rem = 'Copyright (C) 1996-2001 Free Software Foundation, Inc.';
 @rem = '';
 @rem = 'This program is free software; you can redistribute it and/or modify';
 @rem = 'it under the terms of the GNU General Public License as published by';
@@ -27,7 +27,7 @@ shift
 goto loop
 :endloop
 rem ***** This assumes PERL is in the PATH *****
-rem $Id: cons.bat.proto,v 1.4 2000/06/14 22:33:01 rv Exp $
+rem $Id: cons.bat.proto,v 1.6 2001/05/25 14:50:13 knight Exp $
 perl.exe -S cons.bat %ARGS%
 goto endofperl
 @rem ';
@@ -47,18 +47,18 @@ goto endofperl
 # Regression tests keep the code honest by checking for warnings
 # and "use strict" failures.
 
-# $Id: cons.pl,v 1.129 2000/11/16 12:22:37 knight Exp $
+use vars qw( $CVS_id $CVS_ver $ver_num $ver_rev $version );
 
-use vars qw( $ver_num $ver_rev $version );
+$CVS_id = '$Id: cons.pl,v 1.161 2001/05/25 14:50:13 knight Exp $ ';
+$CVS_ver = (split(/\s+/, $CVS_id))[2];
 
-$ver_num = "2.2";
+$ver_num = "2.3";
 $ver_rev = ".0";
-$version = sprintf "This is Cons %s%s " .
-	    '($Id: cons.pl,v 1.129 2000/11/16 12:22:37 knight Exp $)'. "\n",
-	    $ver_num, $ver_rev;
+
+$version = "This is Cons $ver_num$ver_rev ($CVS_id)\n";
 
 # Cons: A Software Construction Tool.
-# Copyright (c) 1996-2000 Free Software Foundation, Inc.
+# Copyright (c) 1996-2001 Free Software Foundation, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -75,7 +75,7 @@ $version = sprintf "This is Cons %s%s " .
 # the Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 # Boston, MA 02111-1307, USA.
 
-require 5.002;
+require 5.003;
 # See the NOTE above about why Cons doesn't "use strict".
 use integer;
 use Cwd;
@@ -174,12 +174,19 @@ Arguments can be any of the following, in any order:
   -pa		Show construction products and associated actions.
   -pw		Show products and where they are defined.
 
-  -q		Be quiet about Installing and Removing targets.
+  -q		Be quiet; multiple -q flags increase quietness level:
+		1: quiet about Installing and Removing targets
+		2: quiet about build commands, up-to-date targets
 
   -r		Remove construction products associated with <targets>
 
   -R <repos>	Search for files in <repos>.  Multiple -R <repos>
 		directories are searched in the order specified.
+
+  -S <pkg>	Use package sig::<pkg> to calculate file signatures.
+		Currently supported values are "md5" for MD5
+		signatures (the default) and "md5::debug" for MD5
+		signature debug information.
 
   -t            Traverse up the directory hierarchy looking for a
 		Construct file, if none exists in the current directory.
@@ -227,10 +234,13 @@ $param::build = 1;		# Build targets
 $param::sigpro = 'md5';		# Signature protocol.
 $param::depfile = '';		# Write all deps out to this file
 $param::salt = '';		# Salt derived file signatures with this.
+$param::sourcesig = ['*' => 'content'];# Source file signature calculation
 $param::rep_sig_times_ok = 1;	# Repository .consign times are in sync
 				#   w/files.
 $param::conscript_chdir = 0;	# Change dir to Conscript directory
 $param::quiet = 0;		# should we show the command being executed.
+
+@param::defaults = ();
 
 #
 $indent = '';
@@ -238,14 +248,15 @@ $indent = '';
 # Display a command while executing or otherwise. This
 # should be called by command builder action methods.
 sub showcom {
-    print($indent . $_[0] . "\n");
+    print($indent . $_[0] . "\n") if ($param::quiet < 2);
 }
 
 # Default environment.
 # This contains only the completely platform-independent information
 # we can figure out.  Platform-specific information (UNIX, Win32)
 # gets added below.
-@param::defaults = (
+@param::base = (
+     'SIGNATURE'    => [ '*' => 'build' ],
      'SUFEXE'	    => $_exe,				# '' on UNIX systems
      'SUFLIB'	    => $_a,				# '.a' on UNIX systems
      'SUFLIBS'      => "$_so:$_a",			# '.so:.a' on UNIX
@@ -261,62 +272,68 @@ sub showcom {
 	 '.c++'=> 'build::command::cxx',
 	 '.C++'=> 'build::command::cxx',
      },
+     'PERL'	    => $^X,
 );
 
-if ($_WIN32) {
-    # Defaults for Win32.
-    # Defined for VC++ 6.0 by Greg Spencer <greg_spencer@acm.org>.
-    # Your mileage may vary.
-    my @win = (
-	'CC'             => 'cl',
-	'CFLAGS'         => '/nologo',
-	'CCCOM'          => '%CC %CFLAGS %_IFLAGS /c %< /Fo%>',
-	'CXX'            => '%CC',
-	'CXXFLAGS'       => '%CFLAGS',
-	'CXXCOM'         => '%CXX %CXXFLAGS %_IFLAGS /c %< /Fo%>',
-	'INCDIRPREFIX'   => '/I',
-	'LINK'           => 'link',
-	'LINKCOM'        => '%LINK %LDFLAGS /out:%> %< %_LDIRS %LIBS',
-	'LINKMODULECOM'  => '%LD /r /o %> %<',
-	'LIBDIRPREFIX'   => '/LIBPATH:',
-	'AR'             => 'lib',
-	'ARFLAGS'        => '/nologo ',
-	'ARCOM'          => "%AR %ARFLAGS /out:%> %<",
-	'RANLIB'         => '',
-	'LD'             => 'link',
-	'LDFLAGS'        => '/nologo ',
-	'PREFLIB'        => '',
-    );
-    push(@param::defaults, @win);
-} else {
-    # Defaults for a typical (?) UNIX platform.
-    # Your mileage may vary.
-    my @unix = (
-	'CC'             => 'cc',
-	'CFLAGS'         => '',
-	'CCCOM'          => '%CC %CFLAGS %_IFLAGS -c %< -o %>',
-	'CXX'            => '%CC',
-	'CXXFLAGS'       => '%CFLAGS',
-	'CXXCOM'         => '%CXX %CXXFLAGS %_IFLAGS -c %< -o %>',
-	'INCDIRPREFIX'   => '-I',
-	'LINK'           => '%CXX',
-	'LINKCOM'        => '%LINK %LDFLAGS -o %> %< %_LDIRS %LIBS',
-	'LINKMODULECOM'  => '%LD -r -o %> %<',
-	'LIBDIRPREFIX'   => '-L',
-	'AR'             => 'ar',
-	'ARFLAGS'        => 'r', # rs?
-	'ARCOM'          => "%AR %ARFLAGS %> %<\n%RANLIB %>",
-	'RANLIB'         => 'ranlib',
-	'AS'             => 'as',
-	'ASFLAGS'        => '',
-	'ASCOM'          => '%AS %ASFLAGS %< -o %>',
-	'LD'             => 'ld',
-	'LDFLAGS'        => '',
-	'PREFLIB'        => 'lib',
-	'ENV'            => { 'PATH' => '/bin:/usr/bin' },
-    );
-    push(@param::defaults, @unix);
-}
+%param::rulesets =
+    (
+     # Defaults for Win32.
+     # Defined for VC++ 6.0 by Greg Spencer <greg_spencer@acm.org>
+     # Your mileage may vary.
+     'msvc' => [
+		'CC'             => 'cl',
+		'CFLAGS'         => '/nologo',
+		'CCCOM'          => '%CC %CFLAGS %_IFLAGS /c %< /Fo%>',
+		'CXX'            => '%CC',
+		'CXXFLAGS'       => '%CFLAGS',
+		'CXXCOM'         => '%CXX %CXXFLAGS %_IFLAGS /c %< /Fo%>',
+		'INCDIRPREFIX'   => '/I',
+		'INCDIRSUFFIX'   => '',
+		'LINK'           => 'link',
+		'LINKCOM'        => '%LINK %LDFLAGS /out:%> %< %_LDIRS %LIBS',
+		'LINKMODULECOM'  => '%LD /r /o %> %<',
+		'LIBDIRPREFIX'   => '/LIBPATH:',
+		'LIBDIRSUFFIX'   => '',
+		'AR'             => 'lib',
+		'ARFLAGS'        => '/nologo ',
+		'ARCOM'          => "%AR %ARFLAGS /out:%> %<",
+		'RANLIB'         => '',
+		'LD'             => 'link',
+		'LDFLAGS'        => '/nologo ',
+		'PREFLIB'        => '',
+		],
+     # Defaults for a typical (?) UNIX platform.
+     # Your mileage may vary.
+     'unix' => [
+		'CC'             => 'cc',
+		'CFLAGS'         => '',
+		'CCCOM'          => '%CC %CFLAGS %_IFLAGS -c %< -o %>',
+		'CXX'            => '%CC',
+		'CXXFLAGS'       => '%CFLAGS',
+		'CXXCOM'         => '%CXX %CXXFLAGS %_IFLAGS -c %< -o %>',
+		'INCDIRPREFIX'   => '-I',
+		'INCDIRSUFFIX'   => '',
+		'LINK'           => '%CXX',
+		'LINKCOM'        => '%LINK %LDFLAGS -o %> %< %_LDIRS %LIBS',
+		'LINKMODULECOM'  => '%LD -r -o %> %<',
+		'LIBDIRPREFIX'   => '-L',
+		'LIBDIRSUFFIX'   => '',
+		'AR'             => 'ar',
+		'ARFLAGS'        => 'r', # rs?
+		'ARCOM'          => ['%AR %ARFLAGS %> %<', '%RANLIB %>'],
+		'RANLIB'         => 'ranlib',
+		'AS'             => 'as',
+		'ASFLAGS'        => '',
+		'ASCOM'          => '%AS %ASFLAGS %< -o %>',
+		'LD'             => 'ld',
+		'LDFLAGS'        => '',
+		'PREFLIB'        => 'lib',
+		'ENV'            => { 'PATH' => '/bin:/usr/bin' },
+		],
+     );
+
+# Set the rules based on the platform.
+script::DefaultRules(script::RuleSet($_WIN32 ? 'msvc' : 'unix'));
 
 # Handle command line arguments.
 while (@ARGV) {
@@ -346,7 +363,7 @@ sub option {
 		    'pw' =>   sub { $param::pflag = 1;
 				    $param::wflag = 1;
 				    $param::build = 0; },
-		    'q' =>    sub { $param::quiet = 1; },
+		    'q' =>    sub { $param::quiet++; },
 		    'r' =>    sub { $param::rflag = 1;
 				    $param::build = 0; },
 		    't' =>    sub { $param::traverse = 1; },
@@ -359,6 +376,7 @@ sub option {
 		    'f' =>    sub { $param::topfile = $_[0]; },
 		    'o' =>    sub { $param::overfile = $_[0]; },
 		    'R' =>    sub { script::Repository($_[0]); },
+		    'S' =>    sub { $param::sigpro = $_[0]; },
 		    'wf' =>   sub { $param::depfile = $_[0]; },
 		);
 
@@ -366,26 +384,33 @@ sub option {
 	&{$opt{$_}}();
 	return;
     }
-    $_  =~ m/(.)(.*)/;
-    if (defined $opt_arg{$1}) {
-	if (! $2) {
-	    $_ = shift @ARGV;
-	    die("$0: -$1 option requires an argument.\n") if ! $_;
+    while ($_) {
+	$_  =~ m/(.)(.*)/;
+	if (defined $opt{$1}) {
+	    &{$opt{$1}}();
+	    $_ = $2;
+	    next;
 	}
-	&{$opt_arg{$1}}($2 || $_);
-	return;
-    }
-    $_  =~ m/(..)(.*)/;
-    if (defined $opt_arg{$1}) {
-	if (! $2) {
-	    $_ = shift @ARGV;
-	    die("$0: -$1 option requires an argument.\n") if ! $_;
+	if (defined $opt_arg{$1}) {
+	    if (! $2) {
+		$_ = shift @ARGV;
+		die("$0: -$1 option requires an argument.\n") if ! $_;
+	    }
+	    &{$opt_arg{$1}}($2 || $_);
+	    return;
 	}
-	&{$opt_arg{$1}}($2 || $_);
-	return;
-    }
-    if ($_) {
-	die qq($0: unrecognized option "-$_".  Use -x for a usage message.\n);
+	$_  =~ m/(..)(.*)/;
+	if (defined $opt_arg{$1}) {
+	    if (! $2) {
+		$_ = shift @ARGV;
+		die("$0: -$1 option requires an argument.\n") if ! $_;
+	    }
+	    &{$opt_arg{$1}}($2 || $_);
+	    return;
+	}
+	if ($_) {
+	    die qq($0: unrecognized option "-$_".  Use -x for a usage message.\n);
+	}
     }
 }
 
@@ -429,7 +454,8 @@ if ($param::depfile) {
 # If the supplied top-level Conscript file is not in the
 # current directory, then change to that directory.
 {
-    my ($vol, $dir, $file) = File::Spec->splitpath(File::Spec->canonpath($param::topfile));
+    my ($vol, $dir, $file) =
+      File::Spec->splitpath(File::Spec->canonpath($param::topfile));
     if ($vol || $dir) {
 	my($cd) = File::Spec->catpath($vol, $dir, undef);
 	chdir($cd) || die("$0: couldn't change to directory $cd ($!)\n");
@@ -443,7 +469,8 @@ my(@targetdir) = ();
 if ($param::traverse && ! -f $param::topfile) {
     my($vol, $dirs, $file) = File::Spec->splitpath(cwd());
     my(@dirs) = (File::Spec->splitdir($dirs), $file);
-    while (! -f File::Spec->catpath($vol, File::Spec->catdir(@dirs), $param::topfile)) {
+    while (! -f File::Spec->catpath($vol, File::Spec->catdir(@dirs),
+				    $param::topfile)) {
 	die("$0: unable to find $param::topfile.\n") if ! @dirs;
 	unshift(@targetdir, pop(@dirs));
     }
@@ -537,7 +564,7 @@ sub buildtoptarget {
 	    print qq($0: "$path" not remade because of errors.\n);
 	    $errors++;
 	} elsif ($status eq "handled") {
-	    print qq($0: "$path" is up-to-date.\n);
+	    print qq($0: "$path" is up-to-date.\n) if ($param::quiet < 2);
 	} elsif ($status eq "unknown") {
 	    # cons error already reported.
 	    $errors++;
@@ -546,10 +573,11 @@ sub buildtoptarget {
 	    my @linked = dir::linked_targets($tgt) if $target_top;
 	    if (@linked) {
 		my @names = map($_->path, @linked);
-		print "Linked targets: @names\n" unless ($param::quiet);
+		print "Linked targets: @names\n" if ($param::quiet < 1);
 		map(buildtoptarget($_), @linked);
 	    } else {
-		print qq($0: nothing to be built in "$path".\n) if $param::build;
+		print qq($0: nothing to be built in "$path".\n)
+		      if $param::build && ($param::quiet < 2);
 	    }
 	} else {
 	    print qq($0: don\'t know how to construct "$path".\n); #'
@@ -609,7 +637,7 @@ sub buildtarget {
 	my($path) = $tgt->path;
 	if (-f $path) {
 	    if (unlink($path)) {
-		print("Removed $path\n") unless ($param::quiet);
+		print("Removed $path\n") if ($param::quiet < 1);
 	    } else {
 		warn("$0: couldn't remove $path\n");
 	    }
@@ -710,7 +738,8 @@ sub main::doscripts {
 	    # Handle chdir to the Conscript file directory, if necessary.
 	    my ($vol, $dir, $file);
 	    if ($param::conscript_chdir) {
-		($vol, $dir, $file) = File::Spec->splitpath(File::Spec->canonpath($path));
+		($vol, $dir, $file) =
+		  File::Spec->splitpath(File::Spec->canonpath($path));
 		if ($vol ne '' || $dir ne '') {
 		    $caller_dir_path = File::Spec->catpath($vol, $dir, undef);
 		    chdir($caller_dir_path) ||
@@ -726,8 +755,8 @@ sub main::doscripts {
 	    # then delete them from the script:: namespace.
 	    my(@del) = grep(! $orig_script_var{$_}, keys %script::);
 	    if (@del) {
-		$priv::self->{script}->{pkgvars} =
-						NameSpace::save('script', @del);
+		$priv::self->{script}->{pkgvars} = NameSpace::save('script',
+								   @del);
 		NameSpace::remove('script', @del);
 	    }
 	    if ($caller_dir_path) {
@@ -785,16 +814,19 @@ sub Link {
 }
 
 # Add directories to the repository search path for files.
-# We're careful about stripping our current directory from
-# the list, which we do by comparing the `pwd` results from
-# the current directory and the specified directory.  This
-# is cumbersome, but assures that the paths will be reported
-# the same regardless of symbolic links.
+# Strip our current directory from the list so Repository
+# (or -R options) can be used from within the repository.
 sub Repository {
     my($my_dir) = Cwd::cwd();
     my $dir;
     foreach $dir (@_) {
-	my($d) = `$^X -e "use Cwd; chdir('$dir') && print cwd"`;
+	# The following more direct call isn't available in
+	# Cwd.pm until some time after 5.003...
+	#	my($d) = Cwd::abs_path($dir);
+	chdir($dir);
+	my($d) = Cwd::cwd();
+	chdir($my_dir);
+	#
 	next if ! $d || ! -d $d || $d eq $my_dir;
 	# We know we can get away with passing undef to lookupdir
 	# as the directory because $dir is an absolute path.
@@ -812,6 +844,10 @@ sub Repository_List {
 # in fact, consistent with the times on the files themselves.
 sub Repository_Sig_Times_OK {
     $param::rep_sig_times_ok = shift;
+}
+
+sub SourceSignature {
+    $param::sourcesig = [@_];
 }
 
 # Specify whether we should chdir to the containing directories
@@ -841,7 +877,7 @@ sub Export {
 sub Import {
     my(@illegal) = grep($special_var{$_}, @_);
     if (@illegal) {
-	die qq($0: cannot Import special Perl variables: @illegal\n");
+	die qq($0: cannot Import special Perl variables: @illegal\n);
     }
     my($parent) = $priv::self->{parent};
     my($imports) = $priv::self->{imports};
@@ -896,6 +932,23 @@ sub Help {
 	print "@_\n";
 	exit 2;
     }
+}
+
+# For windows platforms which use unix tool sets, the msvc defaults may
+# not be useful. Also, in the future, other platforms (Mac?) may have the
+# same problem.
+sub RuleSet {
+    my $style = shift;
+    my @rulesets = sort keys %param::rulesets;
+    die "Unknown style for rules: $style.\n" .
+	"Supported rules are: (" . join(" ", @rulesets) . ")"
+	    unless eval(join("||", map("\$style eq '$_'", @rulesets)));
+    return @param::base, @{$param::rulesets{$style}};
+}
+
+sub DefaultRules {
+    @param::defaults = ();
+    push @param::defaults, @_;
 }
 
 # Return the build name(s) of a file or file list.
@@ -1067,13 +1120,24 @@ sub _subst {
 	# modulo multiple %% pairs in between.
 	# In Perl 5.005 and later, we could actually do this in one regex
 	# using a conditional expression as follows,
-	#	while ($str =~ s/($pre)\%(\{)?([_a-zA-Z]\w*)(?(2)\})/"$1".$env->{$3}/ge) {}
+	#	while ($str =~ s/($pre)\%(\{)?([_a-zA-Z]\w*)(?(2)\})/"$1".
+	#                      $env->{$3}/ge) {}
 	# The following two-step approach is backwards-compatible
 	# to (at least) Perl5.003.
 	my $pre = '^|[^\%](?:\%\%)*';
 	while (($str =~ s/($pre)\%([_a-zA-Z]\w*)/$1.($env->{$2}||'')/ge) ||
-	       ($str =~ s/($pre)\%\{([_a-zA-Z]\w*)\}/$1.($env->{$2}||'')/ge)) {}
+	       ($str =~ s/($pre)\%\{([_a-zA-Z]\w*)\}/$1.($env->{$2}||'')/ge)) {
+	}
 	return $str;
+    }
+}
+
+sub AfterBuild {
+    my($env) = shift;
+    my($perl_eval_str) = pop(@_);
+    my $file;
+    for $file (map($dir::cwd->lookup($_), @_)) {
+	$file->{after_build_func} = $perl_eval_str;
     }
 }
 
@@ -1138,8 +1202,7 @@ sub Install_Local {
 
 sub Objects {
     my($env) = shift;
-    map($dir::cwd->relpath($_),
-	_Objects($env, map($dir::cwd->lookupfile($env->_subst($_)), @_)))
+    map($dir::cwd->relpath($_), $env->_Objects(@_));
 }
 
 # Called with multiple source file references (or object files).
@@ -1147,7 +1210,8 @@ sub Objects {
 sub _Objects {
     my($env) = shift;
     my($suffix) = $env->{SUFOBJ};
-    map(_Object($env, $_, $_->{dir}->lookupfile($_->base_suf($suffix))), @_);
+    map($env->_Object($_, $_->{dir}->lookupfile($_->base_suf($suffix))),
+	map($dir::cwd->lookupfile($env->_subst($_)), grep(defined $_, @_)));
 }
 
 # Called with an object and source reference.  If no object reference
@@ -1177,7 +1241,7 @@ sub Program {
 						 $env->{SUFEXE}));
     my($progenv) = $env->_resolve($tgt);
     $tgt->bind(find build::command::link($progenv, $progenv->{LINKCOM}),
-	       $env->_Objects(map($dir::cwd->lookupfile($env->_subst($_)), @_)));
+	       $env->_Objects(@_));
 }
 
 sub Module {
@@ -1185,8 +1249,7 @@ sub Module {
     my($tgt) = $dir::cwd->lookupfile($env->_subst(shift));
     my($modenv) = $env->_resolve($tgt);
     my($com) = pop(@_);
-    $tgt->bind(find build::command::link($modenv, $com),
-	       $env->_Objects(map($dir::cwd->lookupfile($env->_subst($_)), @_)));
+    $tgt->bind(find build::command::link($modenv, $com), $env->_Objects(@_));
 }
 
 sub LinkedModule {
@@ -1195,7 +1258,7 @@ sub LinkedModule {
     my($progenv) = $env->_resolve($tgt);
     $tgt->bind(find build::command::linkedmodule
 	       ($progenv, $progenv->{LINKMODULECOM}),
-	       $env->_Objects(map($dir::cwd->lookupfile($env->_subst($_)), @_)));
+	       $env->_Objects(@_));
 }
 
 sub Library {
@@ -1203,8 +1266,7 @@ sub Library {
     my($lib) = $dir::cwd->lookupfile(file::addsuffix($env->_subst(shift),
 						 $env->{SUFLIB}));
     my($libenv) = $env->_resolve($lib);
-    $lib->bind(find build::command::library($libenv),
-	       $env->_Objects(map($dir::cwd->lookupfile($env->_subst($_)), @_)));
+    $lib->bind(find build::command::library($libenv), $env->_Objects(@_));
 }
 
 # Simple derivation: you provide target, source(s), command.
@@ -1214,14 +1276,13 @@ sub Library {
 sub Command {
     my($env) = shift;
     my($tgt) = $env->_subst(shift);
-    my($com) = pop(@_);
+    my($builder) = find build::command::user($env, pop(@_), 'script');
     my(@sources) = map($dir::cwd->lookupfile($env->_subst($_)), @_);
     if (ref($tgt)) {
 	# A multi-target command.
 	my(@tgts) = map($dir::cwd->lookupfile($_), @$tgt);
 	die("empty target list in multi-target command\n") if !@tgts;
 	$env = $env->_resolve($tgts[0]);
-	my $builder = find build::command::user($env, $com, 'script');
 	my($multi) = build::multiple->new($builder, \@tgts);
 	for $tgt (@tgts) {
 	    $tgt->bind($multi, @sources);
@@ -1229,7 +1290,6 @@ sub Command {
     } else {
 	$tgt = $dir::cwd->lookupfile($tgt);
 	$env = $env->_resolve($tgt);
-	my $builder = find build::command::user($env, $com, 'script');
 	$tgt->bind($builder, @sources);
     }
 }
@@ -1267,7 +1327,7 @@ package build;
 sub includes { () }
 
 # Null signature for build script.
-sub script { () }
+sub scriptsig { () }
 
 # Not compatible with any other builder, by default.
 sub compatible { 0 }
@@ -1297,7 +1357,7 @@ sub action {
     my($self, $tgt) = @_;
     my($src) = $tgt->{sources}[0];
     main::showcom("Install ${\$src->rpath} as ${\$tgt->path}")
-	if ($param::install && !$param::quiet);
+	if ($param::install && $param::quiet < 1);
     return unless $param::build;
     futil::install($src->rpath, $tgt);
     return 1;
@@ -1312,17 +1372,12 @@ use vars qw( @ISA %com );
 BEGIN { @ISA = qw(build) }
 
 sub find {
-    my ($class, $env, $com, $package) = @_;
-    $com = $env->_subst($com);
+    my($class, $env, $cmd, $package) = @_;
+    my($act) = action::new($env, $cmd);
     $package ||= '';
-    $com{$env,$com,$package} || do {
-	# Remove unwanted bits from signature -- those bracketed by %( ... %)
-	my $comsig = $com;
-	$comsig =~ s/^\@\s*//mg;
-	while ($comsig =~ s/%\(([^%]|%[^\(])*?%\)//g) { }
-	my $self = { env => $env, com => $com, 'package' => $package,
-		     comsig => $comsig };
-	$com{$env,$com,$package} = bless $self, $class;
+    $com{$env,$act,$package} || do {
+	my $self = { env => $env, act => $act, 'package' => $package };
+	$com{$env,$act,$package} = bless $self, $class;
     }
 }
 
@@ -1331,10 +1386,10 @@ sub cachin {
     my($self, $tgt, $sig) = @_;
     if (cache::in($tgt, $sig)) {
 	if ($param::cachecom) {
-	    map { if (! s/^\@\s*//) { main::showcom($_) } } $self->getcoms($tgt);
+	    $self->{act}->show($self->{env}, $tgt);
 	} else {
 	    printf("Retrieved %s from cache\n", $tgt->path)
-		unless ($param::quiet);
+		if ($param::quiet < 1);
 	}
 	return 1;
     }
@@ -1347,221 +1402,15 @@ sub cachout {
     cache::out($tgt, $sig);
 }
 
-# internal routine to process variable options.
-# f: return file part
-# F: return file part, but strip any suffix
-# d: return directory part
-# b: return full path, but strip any suffix (a.k.a. return basename)
-# s: return only the suffix (or an empty string, if no suffix is there)
-# a: return the absolute path to the file
-# no option: return full path to file
-sub _variant {
-    my($opt, $file) = @_;
-    $opt = '' if ! defined $opt;
-    if ($opt eq 'f') { return $file->{entry}; }
-    elsif ($opt eq 'd') { return $file->{dir}->path; }
-    elsif ($opt eq 'F') {
-	my $subst = $file->{entry};
-	$subst =~ s/\.[^\.]+$//;
-	return $subst;
-    }
-    elsif ($opt eq 'b') {
-	my $subst = $file->path;
-	$subst =~ s/\.[^\.]+$//;
-	return $subst;
-    }
-    elsif ($opt eq 's') {
-	my $subst = $file->{entry};
-	$subst =~ m/(\.[^\.]+)$/;
-	return $1;
-    }
-    elsif ($opt eq 'a') {
-	my $path = $file->path;
-	if (! File::Spec->file_name_is_absolute($path)) {
-	    $path = File::Spec->catfile(Cwd::cwd(), $path);
-	}
-	return $path;
-    }
-    else { return $file->path; }
-}
-
-# For the signature of a basic command, we don't bother
-# including the command itself. This is not strictly correct,
-# and if we wanted to be rigorous, we might want to insist
-# that the command was checked for all the basic commands
-# like gcc, etc. For this reason we don't have an includes
-# method.
-
-# Call this to get the command line script: an array of
-# fully substituted commands.
-sub getcoms {
-    my($self, $tgt) = @_;
-    my(@coms);
-    my $com;
-    for $com (split(/\n/, $self->{com})) {
-	my(@src) = (undef, @{$tgt->{sources}});
-	my(@src1) = @src;
-
-	next if $com =~ /^\s*$/;
-
-	# NOTE: we used to have a more elegant s//.../e solution
-	# for the items below, but this caused a bus error...
-
-	# Remove %( and %) -- those are only used to bracket parts
-	# of the command that we don't depend on.
-	$com =~ s/%[()]//g;
-
-	# Deal with %n, n=1,9 and variants.
-	while ($com =~ /%([1-9])(:([fdbsFa]?))?/) {
-	    my($match) = $&;
-	    my($src) = $src1[$1];
-	    my($subst) = _variant($3, $src1[$1]->rfile);
-	    undef $src[$1];
-	    $com =~ s/$match/$subst/;
-	}
-
-	# Deal with %0 aka %> and variants.
-	while ($com =~ /%[0>](:([fdbsFa]?))?/) {
-	    my($match) = $&;
-	    my($subst) = _variant($2, $tgt);
-	    $com =~ s/$match/$subst/;
-	}
-
-	# Deal with %< (all sources except %n's already used)
-	while ($com =~ /%<(:([fdbsFa]?))?/) {
-	    my($match) = $&;
-	    my @list = ();
-	    foreach (@src) {
-		push(@list, _variant($2, $_->rfile)) if $_;
-	    }
-	    my($subst) = join(' ', @list);
-	    $com =~ s/$match/$subst/;
-	}
-
-	# Deal with %[ %].
-	$com =~ s{%\[(.*?)%\]}{
-	    my($func, @args) = grep { $_ ne '' } split(/\s+/, $1);
-	    die("$0: \"$func\" is not defined.\n")
-		unless ($self->{env}->{$func});
-	    &{$self->{env}->{$func}}(@args);
-	}gex;
-
-	# Convert left-over %% into %.
-	$com =~ s/%%/%/g;
-
-	# White space cleanup. XXX NO WAY FOR USER TO HAVE QUOTED SPACES
-	$com = join(' ', split(' ', $com));
-	next if $com =~ /^:/ && $com !~ /^:\S/;
-	push(@coms, $com);
-    }
-    @coms
-}
-
 # Build the target using the previously specified commands.
 sub action {
     my($self, $tgt) = @_;
-    my($env) = $self->{env};
-
-    if ($param::build) {
-	futil::mkdir($tgt->{dir});
-	unlink($tgt->path) if ! $tgt->precious;
-    }
-
-    # Set environment.
-    map(delete $ENV{$_}, keys %ENV);
-    %ENV = %{$env->{ENV}};
-
-    # Handle multi-line commands.
-    my $com;
-    for $com ($self->getcoms($tgt)) {
-	if ($com !~ s/^\@\s*//) {
-	    main::showcom($com);
-	}
-	if ($param::build) {
-
-	  if ($com =~ /^\[perl\]\s*/) {
-	    my $perlcmd = $';
-	    my $status;
-	    {
-	      # Restore the script package variables that were defined
-	      # in the Conscript file that defined this [perl] build,
-	      # so the code executes with the expected variables.
-	      my($package) = $self->{'package'};
-	      my($pkgvars) = $tgt->{conscript}->{pkgvars};
-	      NameSpace::restore($package, $pkgvars) if $pkgvars;
-	      # Actually execute the [perl] command to build the target.
-	      $status = eval "package $package; $perlcmd";
-	      # Clean up the namespace by deleting the package variables
-	      # we just restored.
-	      NameSpace::remove($package, keys %$pkgvars) if $pkgvars;
-	    }
-	    if (!defined($status)) {
-		warn "$0: *** Error during perl command eval: $@.\n";
-		return undef;
-	    } elsif ($status == 0) {
-		warn "$0: *** Perl command returned $status (this indicates an error).\n";
-		return undef;
-	    }
-	    next;
-	  }
-	  #---------------------
-	  # Can't fork on Win32
-	  #---------------------
-	  if ($main::_WIN32) {
-	    system($com);
-	    if ($?) {
-	      my ($b0, $b1) = ($? & 0xFF, $? >> 8);
-	      my $err = $b1 || $?;
-	      my $path = $tgt->path;
-	      my $warn = qq($0: *** [$path] Error $err);
-	      $warn .= " (executable not found in path?)" if $b1 == 0xFF;
-	      warn "$warn\n";
-	      return undef;
-	    }
-	  } else {
-	    my($pid) = fork();
-	    die("$0: unable to fork child process ($!)\n") if !defined $pid;
-	    if (!$pid) {
-	      # This is the child.  We eval the command to suppress -w
-	      # warnings about not reaching the statements afterwards.
-	      eval 'exec($com)';
-	      $com =~ s/\s.*//;
-	      die qq($0: failed to execute "$com" ($!). )
-		. qq(Is this an executable on path "$ENV{PATH}"?\n);
-	    }
-	    for (;;) {
-	      do {} until wait() == $pid;
-	      my ($b0, $b1) = ($? & 0xFF, $? >> 8);
-	      # Don't actually see 0177 on stopped process; is this necessary?
-	      next if $b0 == 0177; # process stopped; we can wait.
-	      if ($b0) {
-		my($core, $sig) = ($b0 & 0200, $b0 & 0177);
-		my($coremsg) = $core ? "; core dumped" : "";
-		$com =~ s/\s.*//;
-		my $path = $tgt->path;
-		my $err = "$0: *** \[$path\] $com terminated by signal " .
-			  "$sig$coremsg\n";
-		warn $err;
-		return undef;
-	      }
-	      if ($b1) {
-		my($path) = $tgt->path;
-		warn qq($0: *** [$path] Error $b1\n); # trying to be like make.
-		return undef;
-	      }
-	      last;
-	    }
-	  }
-	}
-    }
-
-    # success.
-    return 1;
+    $self->{act}->execute($self->{env}, $tgt, $self->{'package'});
 }
 
 # Return script signature.
-sub script {
-    $_[0]->{comsig}
+sub scriptsig {
+    $_[0]->{act}->scriptsig
 }
 
 
@@ -1584,20 +1433,29 @@ sub find {
 	} elsif (ref($pdirs) ne 'ARRAY') {
 	    $pdirs = [ split(/$main::PATH_SEPARATOR/o, $pdirs) ];
 	}
-	my $dir;
+	my($dir, $dpath);
 	for $dir (map($wd->lookupdir($env->_subst($_)), @$pdirs)) {
-	    my($dpath) = $dir->path;
-	    $ldirs .= " ".$env->{LIBDIRPREFIX}.$dpath;
+	    $dpath = $dir->path;
+	    # Add the (presumably local) directory to the -L flags
+	    # if we're not using repositories, the directory exists,
+	    # or it's Linked to a source directory (that is, it *will*
+	    # exist by the time the link occurs).
+	    $ldirs .= " ".$env->{LIBDIRPREFIX}.$dpath.$env->{LIBDIRSUFFIX}
+			if ! @param::rpath || -d $dpath || $dir->is_linked;
 	    next if File::Spec->file_name_is_absolute($dpath);
 	    if (@param::rpath) {
 		my $d;
 		if ($dpath eq $dir::CURDIR) {
 		    foreach $d (map($_->path, @param::rpath)) {
-			$ldirs .= " ".$env->{LIBDIRPREFIX}.$d;
+			$ldirs .= " " . $env->{LIBDIRPREFIX} .
+				  $d . $env->{LIBDIRSUFFIX};
 		    }
 		} else {
+		    my($rpath);
 		    foreach $d (map($_->path, @param::rpath)) {
-			$ldirs .= " ".$env->{LIBDIRPREFIX}.File::Spec->catfile($d, $dpath);
+			$rpath = File::Spec->catfile($d, $dpath);
+			$ldirs .= " ". $env->{LIBDIRPREFIX} .
+				  $rpath . $env->{LIBDIRSUFFIX} if -d $rpath;
 		    }
 		}
 	    }
@@ -1627,7 +1485,7 @@ sub find {
 # environment are built, and return the collected signatures
 # of the libraries in the path.
 sub includes {
-    return $_[0]->{sig} if exists $_[0]->{sig};
+    return $_[0]->{'bsig'} if exists $_[0]->{'bsig'};
     my($self, $tgt) = @_;
     my($env) = $self->{env};
     my($ewd) = $env->{_cwd};
@@ -1641,13 +1499,9 @@ sub includes {
     my(@sigs);
     my(@names);
 
-    if ($main::_WIN32) {
-	# Pass %LIBS symbol through %-substituition
-	# <schwarze@isa.de> 1998-06-18
-	@names = split(' ', $env->_subst($env->{LIBS} || ''));
-    } else {
-	@names = split(' ', $env->{LIBS} || '');
-    }
+    # Pass %LIBS symbol through %-substituition
+    # <schwarze@isa.de> 1998-06-18
+    @names = split(' ', $env->_subst($env->{LIBS} || ''));
     my $name;
     for $name (@names) {
 	my ($lpath, @allnames);
@@ -1689,7 +1543,7 @@ sub includes {
 	    }
 	}
     }
-    $self->{sig} = 'sig'->collect(@sigs);
+    $self->{'bsig'} = 'sig'->collect(@sigs);
 }
 
 # Always compatible with other such builders, so the user
@@ -1773,43 +1627,6 @@ use vars qw( @ISA );
 
 BEGIN { @ISA = qw(build::command) }
 
-# XXX Optimize this to not use ignored paths.
-sub comsig {
-    return $_[0]->{_comsig} if exists $_[0]->{_comsig};
-    my($self, $tgt) = @_;
-    my($env) = $self->{env};
-    $self->{_comsig} = '';
-    my $com;
-  com:
-    for $com (split(/[\n;]/, $self->script)) {
-	# Isolate command word.
-	$com =~ s/^\s*//;
-	$com =~ s/\s.*//;
-	next if !$com; # blank line
-	my($pdirs) = $env->{ENV}->{PATH};
-	if (! defined $pdirs) {
-	    $pdirs = [ ];
-	} elsif (ref($pdirs) ne 'ARRAY') {
-	    $pdirs = [ split(/$main::PATH_SEPARATOR/o, $pdirs) ];
-	}
-	my $dir;
-	for $dir (map($dir::top->lookupdir($_), @$pdirs)) {
-	    my($prog) = $dir->lookup_accessible($com);
-	    if ($prog) { # XXX Not checking execute permission.
-		if ((build $prog) eq 'errors') {
-		    $tgt->{status} = 'errors';
-		    return undef;
-		}
-		next com if $prog->ignore;
-		$self->{_comsig} .= 'sig'->signature($prog);
-		next com;
-	    }
-	}
-	# Not found: let shell give an error.
-    }
-    $self->{_comsig}
-}
-
 sub includes {
     my($self, $tgt) = @_;
     my($sig) = '';
@@ -1823,8 +1640,35 @@ sub includes {
 	}
     }
 
-    # Add the command signature.
-    return &comsig . $sig;
+    # XXX Optimize this to not use ignored paths.
+    if (! exists $self->{_comsig}) {
+	my($env) = $self->{env};
+	$self->{_comsig} = '';
+	my($com, $dir);
+      com:
+	for $com ($self->{act}->commands) {
+	    my($pdirs) = $env->{ENV}->{PATH};
+	    if (! defined $pdirs) {
+		$pdirs = [ ];
+	    } elsif (ref($pdirs) ne 'ARRAY') {
+		$pdirs = [ split(/$main::PATH_SEPARATOR/o, $pdirs) ];
+	    }
+	    for $dir (map($dir::top->lookupdir($_), @$pdirs)) {
+		my($prog) = $dir->lookup_accessible($com);
+		if ($prog) { # XXX Not checking execute permission.
+		    if ((build $prog) eq 'errors') {
+			$tgt->{status} = 'errors';
+			return $sig;
+		    }
+		    next com if $prog->ignore;
+		    $self->{_comsig} .= 'sig'->signature($prog);
+		    next com;
+		}
+	    }
+	}
+    }
+
+    return $self->{_comsig} . $sig
 }
 
 
@@ -1859,9 +1703,9 @@ sub new {
     bless { 'builder' => $builder, 'tgts' => $tgts };
 }
 
-sub script {
+sub scriptsig {
     my($self, $tgt) = @_;
-    $self->{builder}->script($tgt);
+    $self->{builder}->scriptsig($tgt);
 }
 
 sub includes {
@@ -1918,6 +1762,386 @@ sub action {
 
     # Status of action.
     $self->{built};
+}
+
+package action;
+
+sub new {
+    my($env, $act) = @_;
+    if (ref($act) eq 'CODE') {
+	return action::perl->new($act);
+    } else {
+	return action::command->new($env, $act);
+    }
+}
+
+package action::command;
+
+use vars qw( @ISA %cmd );
+
+BEGIN {
+    @ISA = $main::_WIN32 ? 'action::command::win32' : 'action::command::unix';
+}
+
+sub new {
+    my($class, $env, $cmd) = @_;
+    $cmd = $env->_subst($cmd);
+    $cmd{$env,$cmd} || do {
+	# Remove unwanted bits from signature -- those bracketed by %( ... %)
+	my $sigs = $cmd;
+	my $sig = '';
+	if (ref($sigs) eq 'ARRAY') {
+	    # This is an array of commands..
+	    my $f;
+	    foreach $f (@$sigs) {
+		$sig .= _strip($f);
+	    }
+	} else {
+	    $sig = _strip($sigs);
+	}
+	my $self = { cmd => $cmd, cmdsig => 'sig'->cmdsig($sig) };
+	$cmd{$env,$cmd} = bless $self, $class;
+    }
+}
+
+sub _strip {
+    my $sig = shift;
+    $sig =~ s/^\@\s*//mg;
+    while ($sig =~ s/%\(([^%]|%[^\(])*?%\)//g) { }
+    $sig;
+}
+
+sub scriptsig {
+    $_[0]->{cmdsig};
+}
+
+# Return an array of all the commands (first word on each line).
+sub commands {
+    my($self) = @_;
+    my(@cmds) = ();
+    my $com;
+    my $cmd = $self->{'cmd'};
+    my @allcoms;
+
+    push @allcoms, ref $cmd ? @{$cmd} : split(/\n/, $cmd);
+
+    for $com (@allcoms) {
+	$com =~ s/^\s*//;
+	$com =~ s/\s.*//;
+	next if ! $com; # blank line
+	push @cmds, $com;
+    }
+    @cmds;
+}
+
+# internal routine to process variable options.
+# f: return file part
+# F: return file part, but strip any suffix
+# d: return directory part
+# b: return full path, but strip any suffix (a.k.a. return basename)
+# s: return only the suffix (or an empty string, if no suffix is there)
+# a: return the absolute path to the file
+# no option: return full path to file
+sub _variant {
+    my($opt, $file) = @_;
+    $opt = '' if ! defined $opt;
+    my %variant = (
+	    'f' => sub { return $_[0]->{entry}; },
+	    'd' => sub { return $_[0]->{dir}->path; },
+	    'F' => sub { my $subst = $_[0]->{entry};
+			 $subst =~ s/\.[^\.]+$//;
+			 return $subst; },
+	    'b' => sub { my $subst =  $_[0]->path;
+			 $subst =~ s/\.[^\.]+$//;
+			 return $subst; },
+	    's' => sub { my $subst = $_[0]->{entry};
+			 $subst =~ m/(\.[^\.]+)$/;
+			 return $1; },
+	    'a' => sub { my $path = $_[0]->path;
+			 if (! File::Spec->file_name_is_absolute($path)) {
+			     $path = File::Spec->catfile(Cwd::cwd(), $path);
+			 }
+			 return $path; },
+    );
+    if (defined $variant{$opt}) {
+	return &{$variant{$opt}}($file);
+    }
+    return $file->path;
+}
+
+# For the signature of a basic command, we don't bother
+# including the command itself. This is not strictly correct,
+# and if we wanted to be rigorous, we might want to insist
+# that the command was checked for all the basic commands
+# like gcc, etc. For this reason we don't have an includes
+# method.
+
+# Call this to get the command line script: an array of
+# fully substituted commands.
+sub getcoms {
+    my($self, $env, $tgt) = @_;
+    my(@coms);
+    my $com;
+    my @allcoms = ();
+    my $cmd = $self->{'cmd'};
+
+    push @allcoms, ref $cmd ? @{$cmd} : split(/\n/, $cmd);
+
+    for $com (@allcoms) {
+	my(@src) = (undef, @{$tgt->{sources}});
+	my(@src1) = @src;
+
+	next if $com =~ /^\s*$/;
+
+	# NOTE: we used to have a more elegant s//.../e solution
+	# for the items below, but this caused a bus error...
+
+	# Remove %( and %) -- those are only used to bracket parts
+	# of the command that we don't depend on.
+	$com =~ s/%[()]//g;
+
+	# Deal with %n, n=1,9 and variants.
+	while ($com =~ /%([1-9])(:([fdbsFa]?))?/) {
+	    my($match) = $&;
+	    my($src) = $src1[$1];
+	    my($subst) = _variant($3, $src1[$1]->rfile);
+	    undef $src[$1];
+	    $com =~ s/$match/$subst/;
+	}
+
+	# Deal with %0 aka %> and variants.
+	while ($com =~ /%[0>](:([fdbsFa]?))?/) {
+	    my($match) = $&;
+	    my($subst) = _variant($2, $tgt);
+	    $com =~ s/$match/$subst/;
+	}
+
+	# Deal with %< (all sources except %n's already used)
+	while ($com =~ /%<(:([fdbsFa]?))?/) {
+	    my($match) = $&;
+	    my @list = ();
+	    foreach (@src) {
+		push(@list, _variant($2, $_->rfile)) if $_;
+	    }
+	    my($subst) = join(' ', @list);
+	    $com =~ s/$match/$subst/;
+	}
+
+	# Deal with %[ %].
+	$com =~ s{%\[(.*?)%\]}{
+	    my($func, @args) = grep { $_ ne '' } split(/\s+/, $1);
+	    die("$0: \"$func\" is not defined.\n")
+		unless ($env->{$func});
+	    &{$env->{$func}}(@args);
+	}gex;
+
+	# Convert left-over %% into %.
+	$com =~ s/%%/%/g;
+
+	# White space cleanup. XXX NO WAY FOR USER TO HAVE QUOTED SPACES
+	$com = join(' ', split(' ', $com));
+	next if $com =~ /^:/ && $com !~ /^:\S/;
+	push(@coms, $com);
+    }
+    @coms
+}
+
+# Build the target using the previously specified commands.
+sub execute {
+    my($self, $env, $tgt, $package) = @_;
+
+    if ($param::build) {
+	futil::mkdir($tgt->{dir});
+	unlink($tgt->path) if ! $tgt->precious;
+    }
+
+    # Set environment.
+    map(delete $ENV{$_}, keys %ENV);
+    %ENV = %{$env->{ENV}};
+
+    # Handle multi-line commands.
+    my $com;
+    for $com ($self->getcoms($env, $tgt)) {
+	if ($com !~ s/^\@\s*//) {
+	    main::showcom($com);
+	}
+	next if ! $param::build;
+
+	if ($com =~ /^\[perl\]\s*/) {
+	    my $perlcmd = $';
+	    my $status;
+	    {
+		# Restore the script package variables that were defined
+		# in the Conscript file that defined this [perl] build,
+		# so the code executes with the expected variables.
+		# Then actually execute (eval) the [perl] command to build
+		# the target, followed by cleaning up the name space
+		# by deleting the package variables we just restored.
+		my($pkgvars) = $tgt->{conscript}->{pkgvars};
+		NameSpace::restore($package, $pkgvars) if $pkgvars;
+		$status = eval "package $package; $perlcmd";
+		NameSpace::remove($package, keys %$pkgvars) if $pkgvars;
+	    }
+	    if (!defined($status)) {
+		warn "$0: *** Error during perl command eval: $@.\n";
+		return undef;
+	    } elsif ($status == 0) {
+		warn "$0: *** Perl command returned $status "
+		   . "(this indicates an error).\n";
+		return undef;
+	    }
+	    next;
+	}
+	if (! $self->do_command($com, $tgt->path)) {
+		return undef;
+	}
+    }
+
+    # success.
+    return 1;
+}
+
+sub show {
+    my($self, $env, $tgt) = @_;
+    my $com;
+    for $com ($self->getcoms($env, $tgt)) {
+	if ($com !~ /^\@\s*/) {
+	    main::showcom($com);
+	}
+    }
+}
+
+package action::command::unix;
+
+sub do_command {
+    my($class, $com, $path) = @_;
+    my($pid) = fork();
+    die("$0: unable to fork child process ($!)\n") if !defined $pid;
+    if (!$pid) {
+	# This is the child.  We eval the command to suppress -w
+	# warnings about not reaching the statements afterwards.
+	eval 'exec($com)';
+	$com =~ s/\s.*//;
+	die qq($0: failed to execute "$com" ($!). )
+	  . qq(Is this an executable on path "$ENV{PATH}"?\n);
+    }
+    for (;;) {
+	do {} until wait() == $pid;
+	my ($b0, $b1) = ($? & 0xFF, $? >> 8);
+	# Don't actually see 0177 on stopped process; is this necessary?
+	next if $b0 == 0177; # process stopped; we can wait.
+	if ($b0) {
+	    my($core, $sig) = ($b0 & 0200, $b0 & 0177);
+	    my($coremsg) = $core ? "; core dumped" : "";
+	    $com =~ s/\s.*//;
+	    my $err = "$0: *** \[$path\] $com terminated by signal " .
+		  "$sig$coremsg\n";
+	    warn $err;
+	    return undef;
+	}
+	if ($b1) {
+	    warn qq($0: *** [$path] Error $b1\n); # trying to be like make.
+	    return undef;
+	}
+	last;
+    }
+    return 1;
+}
+
+package action::command::win32;
+
+sub do_command {
+    my($class, $com, $path) = @_;
+    system($com);
+    if ($?) {
+	my ($b0, $b1) = ($? & 0xFF, $? >> 8);
+	my $err = $b1 || $?;
+	my $warn = qq($0: *** [$path] Error $err);
+	$warn .= " (executable not found in path?)" if $b1 == 0xFF;
+	warn "$warn\n";
+	return undef;
+    }
+    return 1;
+}
+
+package action::perl;
+
+# THIS IS AN EXPERIMENTAL PACKAGE.  It's entirely possible that the
+# interface may change as this gets completed, so use at your own risk.
+#
+# There are (at least) two issues that need to be solved before blessing
+# this as a real, fully-supported feature:
+#
+#   --	We need to calculate a signature value for a Perl code ref, in
+#	order to rebuild the target if there's a change to the Perl code
+#	used to generate it.
+#
+#	This is not straightforward.  A B::Deparse package exists that
+#	decompiles a coderef into text.  It's reportedly not completely
+#	reliable for closures; it misses which variables are global, and
+#	the values of private lexicals.  Nevertheless, it'd probably
+#	be perfect for our purposes, except that it wasn't added until
+#	some time between Perl 5.00502 and 5.00554, and doesn't seem to
+#	really work until Perl 5.6.0, so by relying on it, we'd lose
+#	support for Perl versions back to 5.003*.
+#
+#   --	Ideally, a code ref should be able to use something like
+#	$env->_subst to fetch values from the construction environment
+#	to modify its behavior without having to cut-and-paste code.
+#	(Actually, since we pass the environment to the executed code
+#	ref, there's no reason you can't do this with the code as it
+#	stands today.)  But this REALLY complicates the signature
+#	calculation, because now the actual signature would depend not
+#	just on the code contents, but on the construction variables (or
+#	maybe just the environment).
+#
+# A potentially valid workaround would be to use the contents of the
+# Conscript file in which the code reference is defined as the code
+# ref's signature.  This has the drawback of causing a recompilation of
+# the target file even in response to unrelated changes in the Conscript
+# file, but it would ensure correct builds without having to solve the
+# messy issues of generating a signature directly from a code ref.
+#
+# Nevertheless, this seemed a useful enough skeleton of a feature that
+# it made sense to release it in hopes that some practical experience
+# will encourage someone to figure out how to solve the signature
+# issues.  Or maybe we'll discover these aren't big issues in practice
+# and end up blessing it as is.
+
+use vars qw( %code );
+
+sub new {
+    my($class, $cref) = @_;
+    $code{$cref} || do {
+	my $sig = '';
+	# Generating a code signature using B::Deparse doesn't really
+	# work for us until Perl 5.6.0.  Here's the code in case
+	# someone wants to use it.
+	#use B::Deparse;
+	#my $deparse = B::Deparse->new();
+	#my $body = $deparse->coderef2text($cref);
+	#$sig = $body;	# should be an MD5 sig
+	my($self) = { cref => $cref, crefsig => $sig };
+	$code{$cref} = bless $self, $class;
+    }
+}
+
+sub scriptsig {
+    $_[0]->{crefsig}
+}
+
+sub execute {
+    my($self, $env, $tgt) = @_;
+    if ($param::build) {
+	futil::mkdir($tgt->{dir});
+	unlink($tgt->path) if ! $tgt->precious;
+	my($cref) = $self->{cref};
+	&$cref($env, $tgt->path, map($_->rpath, @{$tgt->{sources}}));
+    }
+}
+
+sub commands {
+    return ();
 }
 
 
@@ -2097,19 +2321,28 @@ sub scan {
 sub iflags {
     my($self, $env) = @_;
     my($iflags) = '';
-    my($dpath);
-    for $dpath (map($_->path, @{$self->{path}})) {
-	$iflags .= " ".$env->{INCDIRPREFIX}.$dpath;
+    my($dir, $dpath);
+    for $dir (@{$self->{path}}) {
+	$dpath = $dir->path;
+	# Add the (presumably local) directory to the -I flags
+	# if we're not using repositories, the directory exists,
+	# or it's Linked to a source directory (that is, it *will*
+	# exist by the time the compilation occurs).
+	$iflags .= " ".$env->{INCDIRPREFIX}.$dpath.$env->{INCDIRSUFFIX}
+		if ! @param::rpath || -d $dpath || $dir->is_linked;
 	next if File::Spec->file_name_is_absolute($dpath);
 	if (@param::rpath) {
 	    my $d;
 	    if ($dpath eq $dir::CURDIR) {
 		foreach $d (map($_->path, @param::rpath)) {
-		    $iflags .= " ".$env->{INCDIRPREFIX}.$d;
+		    $iflags .= " ".$env->{INCDIRPREFIX}.$d.$env->{INCDIRSUFFIX};
 		}
 	    } else {
+		my($rpath);
 		foreach $d (map($_->path, @param::rpath)) {
-		    $iflags .= " ".$env->{INCDIRPREFIX}.File::Spec->catfile($d, $dpath);
+		    $rpath = File::Spec->catfile($d, $dpath);
+		    $iflags .= " ".$env->{INCDIRPREFIX}.$rpath.$env->{INCDIRSUFFIX}
+				if -d $rpath;
 		}
 	    }
 	}
@@ -2592,7 +2825,8 @@ sub linked_targets {
     }
     while ($dir) {
 	if (defined $dir->{links} && @{$dir->{links}}) {
-	    push(@targets, map(File::Spec->catdir($_, @tail), @{$dir->{links}}));
+	    push @targets,
+		 map(File::Spec->catdir($_, @tail), @{$dir->{links}});
 	    #print STDERR "Found Link: ${\$dir->path} -> @{\$dir->{links}}\n";
 	}
 	unshift @tail, $dir->{entry};
@@ -2666,13 +2900,19 @@ sub rfile {
 		my($t) = $dir->prefix . $path;
 		if (-f $t) {
 		    $rfile = $_[0]->lookupfile($t);
-		    $rfile->{is_on_rpath} = 1;
+		    $rfile->{'lfile'} = $self;
 		    last;
 		}
 	    }
 	}
     }
     $self->{rfile} = $rfile;
+}
+
+# Returns the local file for a repository file;
+# returns self if it's already a local file.
+sub lfile {
+    $_[0]->{'lfile'} || $_[0]
 }
 
 # returns the "precious" status of this file.
@@ -2777,7 +3017,7 @@ sub derived_exists {
 
 # Return if this file is somewhere under a Repository directory.
 sub is_on_rpath {
-    $_[0]->{is_on_rpath};
+    defined $_[0]->{'lfile'};
 }
 
 sub local {
@@ -2842,7 +3082,16 @@ sub ignore {
 
 # Build the file, if necessary.
 sub build {
-    $_[0]->{status} || &file::_build;
+    return $_[0]->{status} if $_[0]->{status};
+    my($status) = &file::_build;
+    if ($_[0]->{after_build_func}) {
+	my($pkgvars) = $_[0]->{conscript}->{pkgvars};
+	NameSpace::restore('script', $pkgvars) if $pkgvars;
+	eval("package script; " . $_[0]->{after_build_func});
+	print "Error running AfterBuild for ${\$_[0]->path}: $@\n" if ($@);
+	NameSpace::remove('script', keys %$pkgvars) if $pkgvars;
+    }
+    return $status;
 }
 
 sub _build {
@@ -2903,7 +3152,7 @@ sub _build {
     # output path name, and (non-substituted) build script.
     my($sig) = 'sig'->collect(map('sig'->signature($_->rfile), @deps),
 			    $builder->includes($self),
-			    $builder->script);
+			    $builder->scriptsig);
 
     # May have gotten errors during computation of dynamic
     # dependency signature, above.
@@ -2922,7 +3171,7 @@ sub _build {
 		main::showcom("Local copy of ${\$self->path} from " .
 			      "${\$self->rpath}");
 		futil::install($self->rpath, $self);
-		'sig'->set($self, $sig);
+		'sig'->bsig($self, $sig);
 	    }
 	    return $self->{status} = 'handled';
 	}
@@ -2941,11 +3190,11 @@ sub _build {
 		if $param::depends;
 	# First check to see if the built file is cached.
 	if ($builder->cachin($self, $sig)) {
-	    'sig'->set($self, $sig);
+	    'sig'->bsig($self, $sig);
 	    return $self->{status} = 'built';
 	} elsif ($builder->action($self)) {
 	    $builder->cachout($self, $sig);
-	    'sig'->set($self, $sig);
+	    'sig'->bsig($self, $sig);
 	    return $self->{status} = 'built';
 	} else {
 	    die("$0: errors constructing ${\$self->path}\n")
@@ -2961,7 +3210,7 @@ sub _build {
 	# loop. Useful only when you wish to recreate a cache from a build.
 	if ($param::cachesync) {
 	    $builder->cachout($self, $sig);
-	    'sig'->set($self, $sig);
+	    'sig'->bsig($self, $sig);
 	}
 	return $self->{status} = 'handled';
     }
@@ -3010,6 +3259,76 @@ sub relpath {
     } else {
 	File::Spec->catfile($dirpath, $_[1]->{entry});
     }
+}
+
+# Return the signature array for this file.
+# This probably belongs in its own "sigarray" package,
+# which would make it easier to optimize performance.
+sub sigarray {
+    if ($_[0]->{sigaref}) {
+	return @{$_[0]->{sigaref}};
+    }
+    my $self = shift;
+    # glob2pat based on The Perl Cookbook, p. 180.
+    sub glob2pat {
+	my $globstr = shift;
+	my %patmap = (
+	    '*' => '.*',
+	    '?' => '.',
+	    '[' => '[',
+	    ']' => ']',
+	    '/' => "\Q$dir::SEPARATOR",	# Cons-specific modification
+	);
+	$globstr =~ s{(.)} { $patmap{$1} || "\Q$1" }ge;
+	return '^' . $globstr . '$';
+    }
+    my @sigarray;
+    my $default;
+    my $builder = $self->lfile->{builder};
+    if (! $builder) {
+	@sigarray = @$param::sourcesig;
+	$default = [qw(content)];
+    } elsif ($builder->{env} && $builder->{env}->{SIGNATURE}) {
+	@sigarray = @{$builder->{env}->{SIGNATURE}};
+	$default = [qw(build)];
+    }
+    my $path = $self->path;
+    while (@sigarray) {
+	my($glob, $aref) = splice(@sigarray, 0, 2);
+	my $re = glob2pat($glob);
+	if ($path =~ /$re/) {
+	    $aref = [split(/\s+/, $aref)] if ! ref $aref;
+	    $self->{sigaref} = $aref;
+	    return @$aref;
+	}
+    }
+    $self->{sigaref} = $default;
+    return @{$self->{sigaref}}
+}
+
+# Decide if this file's signature should be the content or build signature.
+sub sigtype {
+    if ($_[0]->{sigtype}) {
+	return $_[0]->{sigtype};
+    }
+    my $self = shift;
+    my @sigarray = $self->sigarray;
+    my $sigtype;
+    if (grep($_ eq "build", @sigarray)) {
+	$sigtype = 'bsig';
+    } elsif (grep($_ =~ /content$/, @sigarray)) {
+	$sigtype = 'csig';
+    }
+    return $self->{sigtype} = $sigtype;
+}
+
+# Return whether this file is configured to use stored
+# signature values from the .consign file.
+sub stored {
+    if (! defined $_[0]->{stored}) {
+	$_[0]->{stored} = grep($_ eq "stored-content", $_[0]->sigarray);
+    }
+    return $_[0]->{stored};
 }
 
 # Generic entry (file or directory) handling.
@@ -3125,6 +3444,14 @@ sub out {
     $sig::hash::dirty{$dir} = $dir;
 }
 
+# Eliminate the hash entry for a particular file.
+sub clear {
+    my($file) = @_;
+    my($dir) = $file->{dir};
+    delete $dir->{consign}->{$file->{entry}} if $dir->{consign};
+    $sig::hash::dirty{$dir} = $dir;
+}
+
 # Flush hash entries. Called at end or via ^C interrupt.
 sub END {
     return if $called++; # May be called twice.
@@ -3212,151 +3539,270 @@ sub out {
 }
 
 
-# Generic signature handling
+# Generic signature handling package.
+# This handles the higher-layer distinction between content and build
+# signatures, relying on an underlying calculation package like
+# "sig::md5"" to provide the signature values themselves.
 package sig;
 
 use vars qw( @ISA );
 
+# Select the underlying package to be used for signature calculation.
+# We play a few namespace games here.  Specifically, we append
+# "sig::" to the beginning of the subclass we're passed.  Then,
+# if the package ends in "::debug", we actually subclass the
+# "sig::debug" package and as a wrapper around the underlying
+# (e.g.) "sig::md5" package that's doing the real calculation.
 sub select {
     my($package, $subclass) = @_;
-    @ISA = ($package . "::" . $subclass);
+    my $p = $package . "::" . $subclass;
+    my $sigpkg = $p;
+    if ($p =~ /(.*)::debug$/) {
+	$sigpkg = $1;
+	$p = 'sig::debug';
+    }
+    @ISA = ($p);
+    $p->init($sigpkg);
 };
 
+# Set or return the build signature of a file.
+# This is computed elsewhere and passed in to us.
+sub bsig {
+    my($self, $file, $sig) = @_;
+    if (defined $sig) {
+	$file->{'bsig'} = $sig;
+	$self->set($file);
+    } elsif (! defined $file->{'bsig'}) {
+	$file->{'bsig'} = '';
+    }
+    $file->{'bsig'}
+}
+
+# Determine the content signature of a file.
+# This also sets the .consign entry unless the file is in a
+# repository; we don't write into repositories, only read from them.
+sub csig {
+    my($self, $file) = @_;
+    if (! $file->{'csig'}) {
+	$file->{'csig'} = $self->srcsig($file->path);
+	$self->set($file) if ! $file->is_on_rpath;
+    }
+    $_[1]->{'csig'}
+}
+
+# Determine the current signature of an already-existing or
+# non-existant file.  Unless a specific signature type (bsig
+# or csig) is requested, this consults the file's signature
+# array to decide whether to return content or build signature,
+# and whether to use a cached value from a .consign file.
+sub signature {
+    my($self, $file, $sigtype) = @_;
+    $sigtype = $file->sigtype if ! $sigtype;
+    #open(TTY, ">/dev/tty");
+    #print TTY $file->path, ": $sigtype\n";
+    #close(TTY);
+    my($path) = $file->path;
+    my($time) = (stat($path))[9];
+    if ($time) {
+	if ($file->{$sigtype}) {
+	    return $file->{$sigtype};
+	}
+	if ($file->is_on_rpath || $file->stored) {
+	    if ('sig'->fetch($file) && $file->{$sigtype}) {
+		if ($file->{'sigtime'} == $time ||
+		    ! $param::rep_sig_times_ok
+		    && $file->is_on_rpath) {
+		    return $file->{$sigtype};
+		}
+	    }
+	    $file->{$sigtype} = undef;
+	}
+	if ($file->is_on_rpath || ! File::Spec->file_name_is_absolute($path)) {
+	    my $sig = '';
+	    if ($sigtype eq 'bsig') { $sig = $self->bsig($file); }
+	    elsif ($sigtype eq 'csig') { $sig = $self->csig($file); }
+	    return $sig;
+	}
+	return $path . $time;
+    }
+    return $file->{$sigtype} = '';
+}
+
+sub bsignature {
+    my($self, $file) = @_;
+    my($path) = $file->path;
+    my($time) = (stat($path))[9];
+    if ($time) {
+	if ($file->{'bsig'}) {
+	    return $file->{'bsig'};
+	}
+	if ('sig'->fetch($file, 'bsig') && $file->{'bsig'}) {
+		if ($file->{'sigtime'} == $time ||
+		    ! $param::rep_sig_times_ok
+		    && $file->is_on_rpath) {
+		    return $file->{'bsig'};
+		}
+	}
+	if ($file->is_on_rpath || ! File::Spec->file_name_is_absolute($path)) {
+	    return $self->bsig($file);
+	}
+	return $path . $time;
+    }
+    return $file->{'bsig'} = '';
+}
+
+# Invalidate a file's signature, also clearing its .consign entry.
+sub invalidate {
+    my($self, $file) = @_;
+    delete $file->{'sigtime'};
+    delete $file->{'bsig'};
+    delete $file->{'csig'};
+    sig::hash::clear($file);
+}
+
+# Store the signature for a file.
+sub set {
+    my($self, $file) = @_;
+    my $sig = (stat($file->path))[9];
+    $sig .= " " . ($file->{'bsig'} || '-');
+    $sig .= " " . $file->{'csig'} if $file->{'csig'};
+    sig::hash::out($file, $sig);
+}
+
+# Fetch the signature(s) for a file.
+# Returns whether there was a signature to fetch.
+sub fetch {
+    my($self, $file, @kw) = @_;
+    @kw = ('bsig', 'csig') if ! @kw;
+    my $sig = sig::hash::in($file) || '';
+    my($sigtime, $bsig, $csig) = split(/ /, $sig);
+    $file->{'sigtime'} = $sigtime;
+    $file->{'bsig'} = $bsig || '' if grep($_ eq 'bsig', @kw);
+    $file->{'csig'} = $csig || '' if grep($_ eq 'csig', @kw);
+    $file->{'bsig'} = '' if $file->{'bsig'} eq '-';
+    return $sig ne '';
+}
 
 # MD5-based signature package.
 package sig::md5;
 
 use vars qw( $md5 );
 
-BEGIN {
+# Initialize MD5 signature calculation by finding an appropriate
+# module and creating the proper object.
+sub init {
+    my $self = shift;
+    my @md5_modules = qw(Digest::MD5 MD5 Digest::Perl::MD5);
+    # We used to find the right module more simply, using $_ as the
+    # loop iterator and just doing:
+    #
+    #		eval "use $_";
+    #		$module = $_, $last if ! $@;
+    #
+    # in the loop.  Empirically, though, this doesn't pass back the
+    # right value in $module on some ActiveState versions.  (Maybe
+    # it's something to do with the eval in a for loop, I dunno.)
+    # Work around it by using $_ to pass the value out of the loop,
+    # which seems to work everywhere.
     my $module;
-    my @md5_modules = qw(Digest::MD5 MD5);
-    for (@md5_modules) {
-	eval "use $_";
-	if (! $@) {
-	    $module = $_;
-	    last;
-	}
+    for $module (@md5_modules) {
+	eval "use $module";
+	$_ = $module, last if ! $@;
     }
+    $module = $_;
     die "Cannot find any MD5 module from:  @md5_modules" if $@;
 
     $md5 = new $module;
 }
 
-# Invalidate a cache entry.
-sub invalidate {
-    delete $_[1]->{sig}
-}
-
-# Determine the current signature of an already-existing or
-# non-existant file.
-sub signature {
-    if (defined $_[1]->{sig}) {
-	return $_[1]->{sig};
-    }
-    my ($self, $file) = @_;
-    my($path) = $file->path;
-    my($time) = (stat($path))[9];
-    if ($time) {
-	my($sigtime) = sig::hash::in($file);
-	if ($file->is_on_rpath) {
-	    if ($sigtime) {
-		my ($htime, $hsig) = split(' ',$sigtime);
-		if (! $hsig) {
-		    # There was no separate $htime recorded in
-		    # the .consign file, which implies that this
-		    # is a source file in the repository.
-		    # (Source file .consign entries don't record
-		    # $htime.)  Just return the signature that
-		    # someone else conveniently calculated for us.
-		    return $htime;	# actually the signature
-		} else {
-		    if (! $param::rep_sig_times_ok || $htime == $time) {
-			return $file->{sig} = $hsig;
-		    }
-		}
-	    }
-	    return $file->{sig} = $file->path . $time;
-	}
-	if ($sigtime) {
-	    my ($htime, $hsig) = split(' ',$sigtime);
-	    if ($htime eq $time) {
-		return $file->{sig} = $hsig;
-	    }
-	}
-	if (! File::Spec->file_name_is_absolute($path)) {
-	    # A file in the local build directory. Assume we can write
-	    # a signature file for it, and compute the actual source
-	    # signature. We compute the file based on the build path,
-	    # not source path, only because there might be parallel
-	    # builds going on... In principle, we could use the source
-	    # path and only compute this once.
-	    my($sig) = srcsig($path);
-	    sig::hash::out($file, $sig);
-	    return $file->{sig} = $sig;
-	} else {
-	    return $file->{sig} = $file->{entry} . $time;
-	}
-    }
-    $file->{sig} = '';
-}
-
 # Is the provided signature equal to the signature of the current
 # instantiation of the target (and does the target exist)?
 sub current {
-    my($self, $file, $sig) = @_;
-    # Uncomment this to debug checks for signature currency.
-    # <knight@baldmt.com> 1998-10-29
-    # my $fsig = $self->signature($file);
-    # print STDOUT "\$self->signature(${\$file->path})
-    #    '$fsig' eq \$sig '$sig'\n";
-    # return $fsig eq $sig;
-    $self->signature($file) eq $sig;
+    my($self, $file, $sig, $sigtype) = @_;
+    $self->bsignature($file) eq $sig;
 }
 
-# Store the signature for a file.
-sub set {
-    my($self, $file, $sig) = @_;
-    my($time) = (stat($file->path))[9];
-    sig::hash::out($file, "$time $sig");
-    $file->{sig} = $sig
-}
-
-# Return an aggregate signature
+# Return an aggregate signature for a list of signature values.
 sub collect {
     my($self, @sigs) = @_;
     # The following sequence is faster than calling the hex interface.
     $md5->reset();
     $md5->add(join('', $param::salt, @sigs));
-
-    # Uncomment this to debug dependency signatures.
-    # <schwarze@isa.de> 1998-05-08
-    # my $buf = join(', ', $param::salt, @sigs);
-    # print STDOUT "sigbuf=|$buf|\n";
-    # Uncomment this to print the result of dependency signature calculation.
-    # <knight@baldmt.com> 1998-10-13
-    # $buf = unpack("H*", $md5->digest());
-    # print STDOUT "\t=>|$buf|\n";
-    # return $buf;
-
     unpack("H*", $md5->digest());
 }
 
 # Directly compute a file signature as the MD5 checksum of the
 # bytes in the file.
 sub srcsig {
-    my($path) = @_;
+    my($self, $path) = @_;
     $md5->reset();
     open(FILE, $path) || return '';
     binmode(FILE);
     $md5->addfile(\*FILE);
     close(FILE);
-    # Uncomment this to print the result of file signature calculation.
-    # <knight@baldmt.com> 1998-10-13
-    # my $buf = unpack("H*", $md5->digest());
-    # print STDOUT "$path=|$buf|\n";
-    # return $buf;
     unpack("H*", $md5->digest());
+}
+
+# Compute the signature of a command string.
+# For MD5, this is just the string itself, since MD5 will condense
+# the string contents into the ultimate signature.  Other signature
+# schemes may need to figure this out differently.
+sub cmdsig {
+    my($self, $sig) = @_;
+    return $sig
+}
+
+# Generic debug package for signature calculation.
+# Because of the way we're called by sig::select() and then use
+# the specified value to set up @ISA, this package is essentially a
+# factory that creates packages like sig::md5::debug, etc., on the fly.
+package sig::debug;
+
+use vars qw( @ISA $sigpkg $outfh );
+
+local *FH;
+
+sub init {
+    my $self = shift;
+    $sigpkg = shift;
+    @ISA = ($sigpkg);
+    $sigpkg->init();
+    my $file = $ENV{CONS_SIG_DEBUG};
+    if ($file) {
+	if (! open(FH, ">$file")) {
+	    die "Cannot open $file: $!";
+	}
+	$outfh = \*FH;
+    } else {
+	$outfh = \*STDOUT;
+    }
+}
+
+sub current {
+    my($self, $file, $sig, $sigtype) = @_;
+    my $fsig = $self->bsignature($file);
+    my $sub = "${sigpkg}::current";
+    my $sep = "\n" . ' ' x (length($sub) + 1 - 3);
+    print $outfh "$sub(|$fsig|${sep}eq |$sig|)\n";
+    return $fsig eq $sig;
+}
+
+sub collect {
+    my($self, @sigs) = @_;
+    my $sig = $sigpkg->collect(@sigs);
+    my $sub = "${sigpkg}::collect";
+    my $sep = ",\n" . ' ' x (length($sub) + 1);
+    my $buf = join($sep, @sigs);
+    $buf = $param::salt . $sep . $buf if $param::salt;
+    print $outfh "$sub($buf)\n\t=> |$sig|\n";
+    return $sig;
+}
+
+sub srcsig {
+    my($self, $path) = @_;
+    my $sig = $sigpkg->srcsig($path);
+    print $outfh "${sigpkg}::srcsig($path)\n\t=> |$sig|\n";
+    return $sig;
 }
 
 __END__;
@@ -3367,9 +3813,9 @@ Cons - A Software Construction System
 
 =head1 DESCRIPTION
 
-A guide and reference for version 2.2.0
+A guide and reference for version 2.3.0
 
-Copyright (c) 1996-2000 Free Software Foundation, Inc.
+Copyright (c) 1996-2001 Free Software Foundation, Inc.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -3528,7 +3974,7 @@ type C<cons hello> to build the application:
 
 A key simplification of Cons is the idea of a B<construction environment>. A
 construction environment is an B<object> characterized by a set of key/value
-pairs and a set of B<methods. >In order to tell Cons how to build something,
+pairs and a set of B<methods>. In order to tell Cons how to build something,
 you invoke the appropriate method via an appropriate construction
 environment. Consider the following example:
 
@@ -4069,58 +4515,120 @@ is pretty smart about rebuilding things when you change options.
 
 =head1 Signatures
 
+Cons uses file B<signatures> to decide if a derived file is out-of-date
+and needs rebuilding.  In essence, if the contents of a file change,
+or the manner in which the file is built changes, the file's signature
+changes as well.  This allows Cons to decide with certainty when a file
+needs rebuilding, because Cons can detect, quickly and reliably, whether
+any of its dependency files have been changed.
 
-=head2 MD5 cryptographic signatures
 
-Whenever Cons creates a derived file, it stores a B<signature> for that
-file. The signature is stored in a separate file, one per directory. After
-the previous example was compiled, the F<.consign> file in the
+=head2 MD5 content and build signatures
+
+Cons uses the B<MD5> (B<Message Digest 5>) algorithm to compute file
+signatures.  The MD5 algorithm computes a strong cryptographic checksum
+for any given input string.  Cons can, based on configuration, use two
+different MD5 signatures for a given file:
+
+The B<content signature> of a file is an MD5 checksum of the file's
+contents.  Consequently, when the contents of a file change, its content
+signature changes as well.
+
+The B<build signature> of a file is a combined MD5 checksum of:
+
+=over 4
+
+the signatures of all the input files used to build the file
+
+the signatures of all dependency files discovered by source scanners
+(for example, C<.h> files)
+
+the signatures of all dependency files specified explicitly via the
+C<Depends> method)
+
+the command-line string used to build the file
+
+=back
+
+The build signature is, in effect, a digest of all the dependency
+information for the specified file.  Consequently, a file's build
+signature changes whenever any part of its dependency information
+changes: a new file is added, the contents of a file on which it depends
+change, there's a change to the command line used to build the file (or
+any of its dependency files), etc.
+
+For example, in the previous section, the build signature of the
+F<world.o> file will include:
+
+=over 4
+
+the signature of the F<world.c> file
+
+the signatures of any header files that Cons detects are included,
+directly or indirectly, by F<world.c>
+
+the text of the actual command line was used to generate F<world.o>
+
+=back
+
+Similarly, the build signature of the F<libworld.a> file will include
+all the signatures of its constituents (and hence, transitively, the
+signatures of B<their> constituents), as well as the command line that
+created the file.
+
+Note that there is no need for a derived file to depend upon any
+particular F<Construct> or F<Conscript> file.  If changes to these files
+affect a file, then this will be automatically reflected in its build
+signature, since relevant parts of the command line are included in the
+signature. Unrelated F<Construct> or F<Conscript> changes will have no
+effect.
+
+
+=head2 Storing signatures in .consign files
+
+Before Cons exits, it stores the calculated signatures for all of the
+files it built or examined in F<.consign> files, one per directory.
+Cons uses this stored information on later invocations to decide if
+derived files need to be rebuilt.
+
+After the previous example was compiled, the F<.consign> file in the
 F<build/peach/world> directory looked like this:
 
-  world.o:834179303 23844c0b102ecdc0b4548d1cd1cbd8c6
-  libworld.a:834179304 9bf6587fa06ec49d864811a105222c00
+  world.h:985533370 - d181712f2fdc07c1f05d97b16bfad904
+  world.o:985533372 2a0f71e0766927c0532977b0d2158981
+  world.c:985533370 - c712f77189307907f4189b5a7ab62ff3
+  libworld.a:985533374 69e568fc5241d7d25be86d581e1fb6aa
 
-The first number is a timestamp--for a UNIX systems, this is typically the
-number of seconds since January 1st, 1970. The second value is an MD5
-checksum. The B<Message Digest Algorithm> is an algorithm that, given an
-input string, computes a strong cryptographic signature for that string. The
-MD5 checksum stored in the F<.consign> file is, in effect, a digest of all
-the dependency information for the specified file. So, for example, for the
-F<world.o> file, this includes at least the F<world.c> file, and also any
-header files that Cons knows about that are included, directly or indirectly
-by F<world.c>. Not only that, but the actual command line that was used to
-generate F<world.o> is also fed into the computation of the
-signature. Similarly, F<libworld.a> gets a signature which ``includes'' all
-the signatures of its constituents (and hence, transitively, the signatures
-of B<their> constituents), as well as the command line that created the
-file.
+After the file name and colon, the first number is a timestamp of the
+file's modification time (on UNIX systems, this is typically the number
+of seconds since January 1st, 1970).  The second value is the build
+signature of the file (or ``-'' in the case of files with no build
+signature--that is, source files).  The third value, if any, is the
+content signature of the file.
 
-The signature of a non-derived file is computed, by default, by taking the
-current modification time of the file and the file's entry name (unless
-there happens to be a current F<.consign> entry for that file, in which case
-that signature is used).
 
-Notice that there is no need for a derived file to depend upon any
-particular F<Construct> or F<Conscript> file--if changes to these files
-affect the file in question, then this will be automatically reflected in
-its signature, since relevant parts of the command line are included in the
-signature. Unrelated changes will have no effect.
+=head2 Using build signatures to decide when to rebuild files
 
-When Cons considers whether to derive a particular file, then, it first
-computes the expected signature of the file. It then compares the file's
-last modification time with the time recorded in the F<.consign> entry, if
-one exists. If these times match, then the signature stored in the
-F<.consign> file is considered to be accurate. If the file's previous
-signature does not match the new, expected signature, then the file must be
-rederived.
+When Cons is deciding whether to build or rebuild a derived file, it
+first computes the file's current build signature.  If the file doesn't
+exist, it must obviously be built.
 
-Notice that a file will be rederived whenever anything about a dependent
-file changes. In particular, notice that B<any> change to the modification
-time of a dependent (forward or backwards in time) will force recompilation
-of the derived file.
+If, however, the file already exists, Cons next compares the
+modification timestamp of the file against the timestamp value in
+the F<.consign> file.  If the timestamps match, Cons compares the
+newly-computed build signature against the build signature in the
+F<.consign> file.  If the timestamps do not match or the build
+signatures do not match, the derived file is rebuilt.
 
-The use of these signatures is an extremely simple, efficient, and effective
-method of improving--dramatically--the reproducibility of a system.
+After the file is built or rebuilt, Cons arranges to store the
+newly-computed build signature in the F<.consign> file when it exits.
+
+
+=head2 Signature example
+
+The use of these signatures is an extremely simple, efficient, and
+effective method of improving--dramatically--the reproducibility of a
+system.
 
 We'll demonstrate this with a simple example:
 
@@ -4144,6 +4652,212 @@ Notice how Cons recompiles at the appropriate times:
   % cons hello
   cc -c hello.c -o hello.o
   cc -o hello hello.o
+
+
+=head2 Source-file signature configuration
+
+Cons provides a C<SourceSignature> method that allows you to configure
+how the signature should be calculated for any source file when its
+signature is being used to decide if a dependent file is up-to-date.
+The arguments to the C<SourceSignature> method consist of one or more
+pairs of strings:
+
+  SourceSignature 'auto/*.c' => 'content',
+		  '*' => 'stored-content';
+
+The first string in each pair is a pattern to match against derived file
+path names. The pattern is a file-globbing pattern, not a Perl regular
+expression; the pattern <*.l> will match all Lex source files.  The C<*>
+wildcard will match across directory separators; the pattern C<foo/*.c>
+would match all C source files in any subdirectory underneath the C<foo>
+subdirectory.
+
+The second string in each pair contains one of the following keywords to
+specify how signatures should be calculated for source files that match
+the pattern.  The available keywords are:
+
+=over 4
+
+=item content
+
+Use the content signature of the source file when calculating signatures
+of files that depend on it.  This guarantees correct calculation of the
+file's signature for all builds, by telling Cons to read the contents of
+a source file to calculate its content signature each time it is run.
+
+=item stored-content
+
+Use the source file's content signature as stored in the F<.consign>
+file, provided the file's timestamp matches the cached timestamp value
+in the F<.consign> file.  This optimizes performance, with the slight
+risk of an incorrect build if a source file's contents have been changed
+so quickly after its previous update that the timestamp still matches
+the stored timestamp in the F<.consign> file even though the contents
+have changed.
+
+=back
+
+The Cons default behavior of always calculating a source file's
+signature from the file's contents is equivalent to specifying:
+
+  SourceSignature '*' => 'content';
+
+The C<'*'> will match all source files.  The C<content> keyword
+specifies that Cons will read the contents of a source file to calculate
+its signature each time it is run.
+
+A useful global performance optimization is:
+
+  SourceSignature '*' => 'stored-content';
+
+This specifies that Cons will use pre-computed content signatures
+from F<.consign> files, when available, rather than re-calculating a
+signature from the the source file's contents each time Cons is run.  In
+practice, this is safe for most build situations, and only a problem
+when source files are changed automatically (by scripts, for example).
+The Cons default, however, errs on the side of guaranteeing a correct
+build in all situations.
+
+Cons tries to match source file path names against the patterns in the
+order they are specified in the C<SourceSignature> arguments:
+
+  SourceSignature '/usr/repository/objects/*' => 'stored-content',
+		  '/usr/repository/*' => 'content',
+		  '*.y' => 'content',
+		  '*' => 'stored-content';
+
+In this example, all source files under the F</usr/repository/objects>
+directory will use F<.consign> file content signatures, source files
+anywhere else underneath F</usr/repository> will not use F<.consign>
+signature values, all Yacc source files (C<*.y>) anywhere else will not
+use F<.consign> signature values, and any other source file will use
+F<.consign> signature values.
+
+
+=head2 Derived-file signature configuration
+
+Cons provides a C<SIGNATURE> construction variable that allows you to
+configure how signatures are calculated for any derived file when its
+signature is being used to decide if a dependent file is up-to-date.
+The value of the C<SIGNATURE> construction variable is a Perl array
+reference that holds one or more pairs of strings, like the arguments to
+the C<SourceSignature> method.
+
+The first string in each pair is a pattern to match against derived file
+path names. The pattern is a file-globbing pattern, not a Perl regular
+expression; the pattern `*.obj' will match all (Win32) object files.
+The C<*> wildcard will match across directory separators; the pattern
+`foo/*.a' would match all (UNIX) library archives in any subdirectory
+underneath the foo subdirectory.
+
+The second string in each pair contains one of the following keywords
+to specify how signatures should be calculated for derived files that
+match the pattern.  The available keywords are the same as for the
+C<SourceSignature> method, with an additional keyword:
+
+=over 4
+
+=item build
+
+Use the build signature of the derived file when calculating signatures
+of files that depend on it.  This guarantees correct builds by forcing
+Cons to rebuild any and all files that depend on the derived file.
+
+=item content
+
+Use the content signature of the derived file when calculating signatures
+of files that depend on it.  This guarantees correct calculation of the
+file's signature for all builds, by telling Cons to read the contents of
+a derived file to calculate its content signature each time it is run.
+
+=item stored-content
+
+Use the derived file's content signature as stored in the F<.consign>
+file, provided the file's timestamp matches the cached timestamp value
+in the F<.consign> file.  This optimizes performance, with the slight
+risk of an incorrect build if a derived file's contents have been
+changed so quickly after a Cons build that the file's timestamp still
+matches the stored timestamp in the F<.consign> file.
+
+=back
+
+The Cons default behavior (as previously described) for using
+derived-file signatures is equivalent to:
+
+  $env = new cons(SIGNATURE => ['*' => 'build']);
+
+The C<*> will match all derived files.  The C<build> keyword specifies
+that all derived files' build signatures will be used when calculating
+whether a dependent file is up-to-date.
+
+A useful alternative default C<SIGNATURE> configuration for many sites:
+
+  $env = new cons(SIGNATURE => ['*' => 'content']);
+
+In this configuration, derived files have their signatures calculated
+from the file contents.  This adds slightly to Cons' workload, but has
+the useful effect of "stopping" further rebuilds if a derived file is
+rebuilt to exactly the same file contents as before, which usually
+outweighs the additional computation Cons must perform.
+
+For example, changing a comment in a C file and recompiling should
+generate the exact same object file (assuming the compiler doesn't
+insert a timestamp in the object file's header).  In that case,
+specifying C<content> or C<stored-content> for the signature calculation
+will cause Cons to recognize that the object file did not actually
+change as a result of being rebuilt, and libraries or programs that
+include the object file will not be rebuilt.  When C<build> is
+specified, however, Cons will only "know" that the object file was
+rebuilt, and proceed to rebuild any additional files that include the
+object file.
+
+Note that Cons tries to match derived file path names against the
+patterns in the order they are specified in the C<SIGNATURE> array
+reference:
+
+  $env = new cons(SIGNATURE => ['foo/*.o' => 'build',
+				'*.o' => 'content',
+				'*.a' => 'cache-content',
+				'*' => 'content']);
+
+In this example, all object files underneath the F<foo> subdirectory
+will use build signatures, all other object files (including object
+files underneath other subdirectories!) will use F<.consign> file
+content signatures, libraries will use F<.consign> file build
+signatures, and all other derived files will use content signatures.
+
+
+=head2 Debugging signature calculation
+
+Cons provides a C<-S> option that can be used to specify what internal
+Perl package Cons should use to calculate signatures.  The default Cons
+behavior is equivalent to specifying C<-S md5> on the command line.
+
+The only other package (currently) available is an C<md5::debug>
+package that prints out detailed information about the MD5 signature
+calculations performed by Cons:
+
+  % cons -S md5::debug hello
+  sig::md5::srcsig(hello.c)
+          => |52d891204c62fe93ecb95281e1571938|
+  sig::md5::collect(52d891204c62fe93ecb95281e1571938)
+          => |fb0660af4002c40461a2f01fbb5ffd03|
+  sig::md5::collect(52d891204c62fe93ecb95281e1571938,
+                    fb0660af4002c40461a2f01fbb5ffd03,
+                    cc   -c %< -o %>)
+          => |f7128da6c3fe3c377dc22ade70647b39|
+  sig::md5::current(||
+                 eq |f7128da6c3fe3c377dc22ade70647b39|)
+  cc -c hello.c -o hello.o
+  sig::md5::collect()
+          => |d41d8cd98f00b204e9800998ecf8427e|
+  sig::md5::collect(f7128da6c3fe3c377dc22ade70647b39,
+                    d41d8cd98f00b204e9800998ecf8427e,
+                    cc  -o %> %<  )
+          => |a0bdce7fd09e0350e7efbbdb043a00b0|
+  sig::md5::current(||
+                 eq |a0bdce7fd09e0350e7efbbdb043a00b0|)
+  cc -o hello, hello.o
 
 
 =head1 Code Repositories
@@ -4369,8 +5083,8 @@ directive is used to include files.
 
 In order to inform the compiler about the repository trees, Cons will add
 appropriate C<-I> flags to the compilation commands.  This means that the
-C<CPPPATH> variable in the construct environment must explicitly specify all
-subdirectories which are to be searched for included files, including the
+C<CPPPATH> variable in the construction environment must explicitly specify
+all subdirectories which are to be searched for included files, including the
 current directory.  Consequently, we can fix the above example by changing
 the environment creation in the F<Construct> file as follows:
 
@@ -4407,10 +5121,18 @@ Would yield a compilation command of:
 
   cc -Ia -I/u1/a -I/u2/a -Ib -I/u1/b -I/u2/b -Ic -I/u1/c -I/u2/c -c hello.c -o hello.o
 
-Because Cons relies on the compiler's C<-I> flags to communicate the order
-in which repository directories must be searched, Cons' handling of
-repository directories is fundamentally incompatible with using
-double-quotes on the C<#include> directives in your C source code:
+In order to shorten the command lines as much as possible, Cons will
+remove C<-I> flags for any directories, locally or in the repositories,
+which do not actually exist.  (Note that the C<-I> flags are not included
+in the MD5 signature calculation for the target file, so the target will
+not be recompiled if the compilation command changes due to a directory
+coming into existence.)
+
+Because Cons relies on the compiler's C<-I> flags to communicate the
+order in which repository directories must be searched, Cons' handling
+of repository directories is fundamentally incompatible with using
+double-quotes on the C<#include> directives in any C source code that
+you plan to modify:
 
   #include "file.h"	/* DON'T USE DOUBLE-QUOTES LIKE THIS */
 
@@ -4419,10 +5141,14 @@ always first search the directory containing the source file.  This
 undermines the elaborate C<-I> options that Cons constructs to make the
 preprocessor conform to its preferred search path.
 
-Consequently, when using repository trees in Cons,
-B<always> use angle-brackets for included files:
+Consequently, when using repository trees in Cons, B<always> use
+angle-brackets for included files in any C source (.c or .h) files that
+you plan to modify locally:
 
   #include <file.h>	/* USE ANGLE-BRACKETS INSTEAD */
+
+Code that will not change can still safely use double quotes on #include
+lines.
 
 
 =head2 Repository_List
@@ -4689,32 +5415,90 @@ recorded for posterity (and reproducibility) directly in the scripts.
 
 =head1 More on construction environments
 
+As previously mentioned, a B<construction environment> is an object that
+has a set of keyword/value pairs and a set of methods, and which is used
+to tell Cons how target files should be built.  This section describes
+how Cons uses and expands construction environment values to control its
+build behavior.
+
+=head2 Construction variable expansion
+
+Construction variables from a construction environment are expanded
+by preceding the keyword with a C<%> (percent sign):
+
+  Construction variables:
+	XYZZY => 'abracadabra',
+
+  The string:  "The magic word is:  %XYZZY!"
+  expands to:  "The magic word is:  abracadabra!"
+
+A construction variable name may be surrounded by C<{> and C<}> (curly
+braces), which are stripped as part of the expansion.  This can
+sometimes be necessary to separate a variable expansion from trailing
+alphanumeric characters:
+
+  Construction variables:
+	OPT    => 'value1',
+	OPTION => 'value2',
+
+  The string:  "%OPT %{OPT}ION %OPTION %{OPTION}"
+  expands to:  "value1 value1ION value2 value2"
+
+Construction variable expansion is recursive--that is, a string
+containing C<%->expansions after substitution will be re-expanded until
+no further substitutions can be made:
+
+  Construction variables:
+	STRING => 'The result is:  %FOO',
+	FOO    => '%BAR',
+	BAR    => 'final value',
+
+  The string:  "The string says:  %STRING"
+  expands to:  "The string says:  The result is:  final value"
+
+If a construction variable is not defined in an environment, then the
+null string is substituted:
+
+  Construction variables:
+	FOO => 'value1',
+	BAR => 'value2',
+
+  The string:  "%FOO <%NO_VARIABLE> %BAR"
+  expands to:  "value1 <> value2"
+
+A doubled C<%%> will be replaced by a single C<%>:
+
+  The string:  "Here is a percent sign:  %%"
+  expands to:  "Here is a percent sign: %"
+
 =head2 Default construction variables
 
-We have mentioned, and used, the concept of a B<construction environment>,
-many times in the preceding pages. Now it's time to make this a little more
-concrete. With the following statement:
+When you specify no arguments when creating a new construction
+environment:
 
   $env = new cons();
 
-a reference to a new, default construction environment is created. This
-contains a number of construction variables and some methods. At the present
-writing, the default list of construction variables is defined as follows:
+Cons creates a reference to a new, default construction
+environment. This contains a number of construction variables and some
+methods. At the present writing, the default construction variables on a
+UNIX system are:
 
-  CC		=> 'cc',
-  CFLAGS	=> '',
-  CCCOM		=> '%CC %CFLAGS %_IFLAGS -c %< -o %>',
+  CC            => 'cc',
+  CFLAGS        => '',
+  CCCOM         => '%CC %CFLAGS %_IFLAGS -c %< -o %>',
+  CXX           => '%CC',
+  CXXFLAGS      => '%CFLAGS',
+  CXXCOM        => '%CXX %CXXFLAGS %_IFLAGS -c %< -o %>',
   INCDIRPREFIX  => '-I',
-  CXX		=> '%CC',
-  CXXFLAGS	=> '%CFLAGS',
-  CXXCOM	=> '%CXX %CXXFLAGS %_IFLAGS -c %< -o %>',
-  LINK		=> '%CXX',
-  LINKCOM	=> '%LINK %LDFLAGS -o %> %< %_LDIRS %LIBS',
-  LINKMODULECOM	=> '%LD -r -o %> %<',
+  INCDIRSUFFIX  => '',
+  LINK          => '%CXX',
+  LINKCOM       => '%LINK %LDFLAGS -o %> %< %_LDIRS %LIBS',
+  LINKMODULECOM => '%LD -r -o %> %<',
   LIBDIRPREFIX  => '-L',
+  LIBDIRSUFFIX  => '',
   AR		=> 'ar',
   ARFLAGS	=> 'r',
-  ARCOM		=> "%AR %ARFLAGS %> %<\n%RANLIB %>",
+  ARCOM		=> ['%AR %ARFLAGS %> %<', '%RANLIB %>'],
   RANLIB	=> 'ranlib',
   AS		=> 'as',
   ASFLAGS	=> '',
@@ -4725,57 +5509,64 @@ writing, the default list of construction variables is defined as follows:
   SUFLIB	=> '.a',
   SUFLIBS	=> '.so:.a',
   SUFOBJ	=> '.o',
+  SIGNATURE     => [ '*' => 'build' ],
   ENV		=> { 'PATH' => '/bin:/usr/bin' },
 
 
-On Win32 systems (Windows NT), the following construction variables
-are overridden in the default:
+And on a Win32 system (Windows NT), the default construction variables
+are (unless the default rule style is set using the B<DefaultRules>
+method):
 
   CC		=> 'cl',
   CFLAGS	=> '/nologo',
   CCCOM		=> '%CC %CFLAGS %_IFLAGS /c %< /Fo%>',
   CXXCOM        => '%CXX %CXXFLAGS %_IFLAGS /c %< /Fo%>',
   INCDIRPREFIX  => '/I',
-  LINK		=> 'link',
-  LINKCOM	=> '%LINK %LDFLAGS /out:%> %< %_LDIRS %LIBS',
-  LINKMODULECOM	=> '%LD /r /o %> %<',
+  INCDIRSUFFIX  => '',
+  LINK          => 'link',
+  LINKCOM       => '%LINK %LDFLAGS /out:%> %< %_LDIRS %LIBS',
+  LINKMODULECOM => '%LD /r /o %> %<',
   LIBDIRPREFIX  => '/LIBPATH:',
-  AR		=> 'lib',
-  ARFLAGS	=> '/nologo ',
-  ARCOM		=> "%AR %ARFLAGS /out:%> %<",
-  RANLIB	=> '',
-  LD		=> 'link',
-  LDFLAGS	=> '/nologo ',
-  PREFLIB	=> '',
+  LIBDIRSUFFIX  => '',
+  AR            => 'lib',
+  ARFLAGS       => '/nologo ',
+  ARCOM         => "%AR %ARFLAGS /out:%> %<",
+  RANLIB        => '',
+  LD            => 'link',
+  LDFLAGS       => '/nologo ',
+  PREFLIB       => '',
   SUFEXE	=> '.exe',
   SUFLIB	=> '.lib',
   SUFLIBS	=> '.dll:.lib',
   SUFOBJ	=> '.obj',
+  SIGNATURE     => [ '*' => 'build' ],
 
 These variables are used by the various methods associated with the
-environment, in particular any method that ultimately invokes an external
+environment. In particular, any method that ultimately invokes an external
 command will substitute these variables into the final command, as
 appropriate. For example, the C<Objects> method takes a number of source
 files and arranges to derive, if necessary, the corresponding object
-files. For example:
+files:
 
   Objects $env 'foo.c', 'bar.c';
 
 This will arrange to produce, if necessary, F<foo.o> and F<bar.o>. The
-command invoked is simply C<%CCCOM>, which expands through substitution, to
-the appropriate external command required to build each object. We will
-explore the substitution rules further under the C<Command> method, below.
+command invoked is simply C<%CCCOM>, which expands, through substitution,
+to the appropriate external command required to build each object. The
+substitution rules will be discussed in detail in the next section.
 
 The construction variables are also used for other purposes. For example,
 C<CPPPATH> is used to specify a colon-separated path of include
 directories. These are intended to be passed to the C preprocessor and are
 also used by the C-file scanning machinery to determine the dependencies
-involved in a C Compilation. Variables beginning with underscore, are
-created by various methods, and should normally be considered ``internal''
-variables. For example, when a method is called which calls for the creation
-of an object from a C source, the variable C<_IFLAGS> is created: this
-corresponds to the C<-I> switches required by the C compiler to represent
-the directories specified by C<CPPPATH>.
+involved in a C Compilation.
+
+Variables beginning with underscore are created by various methods,
+and should normally be considered ``internal'' variables. For example,
+when a method is called which calls for the creation of an object from
+a C source, the variable C<_IFLAGS> is created: this corresponds to the
+C<-I> switches required by the C compiler to represent the directories
+specified by C<CPPPATH>.
 
 Note that, for any particular environment, the value of a variable is set
 once, and then never reset (to change a variable, you must create a new
@@ -4785,11 +5576,13 @@ but once set, they remain fixed for the life of the environment.
 
 The C<CFLAGS>, C<LDFLAGS>, and C<ARFLAGS> variables all supply a place
 for passing options to the compiler, loader, and archiver, respectively.
-Less obviously, the C<INCDIRPREFIX> variable specifies the option string
-to be appended to the beginning of each include directory so that the
-compiler knows where to find F<.h> files.  Similarly, the C<LIBDIRPREFIX>
-variable specifies the option string to be appended to the beginning of
-each directory that the linker should search for libraries.
+
+The C<INCDIRPREFIX> and C<INCDIRSUFFIX> variables specify option
+strings to be appended to the beginning and end, respectively, of each
+include directory so that the compiler knows where to find F<.h> files.
+Similarly, the C<LIBDIRPREFIX> and C<LIBDIRSUFFIX> variables specify the
+option string to be appended to the beginning of and end, respectively,
+of each directory that the linker should search for libraries.
 
 Another variable, C<ENV>, is used to determine the system environment during
 the execution of an external command. By default, the only environment
@@ -4799,10 +5592,111 @@ your own execution path, in your top-level F<Construct> file (or perhaps by
 importing an appropriate construction package with the Perl C<use>
 command). The default variables are intended to get you off the ground.
 
-=head2 Interpolating construction variables
+=head2 Expanding variables in construction commands
 
-Construction environment variables may be interpolated in the source and
-target file names by prefixing the construction variable name with C<%>.
+Within a construction command, construction variables will be expanded
+according to the rules described above.  In addition to normal variable
+expansion from the construction environment, construction commands also
+expand the following pseudo-variables to insert the specific input and
+output files in the command line that will be executed:
+
+=over 10
+
+=item %>
+
+The target file name.  In a multi-target command, this expands to the
+first target mentioned.)
+
+=item %0
+
+Same as C<%E<gt>>.
+
+=item %1, %2, ..., %9
+
+These refer to the first through ninth input file, respectively.
+
+=item %E<lt>
+
+The full set of input file names. If any of these have been used
+anywhere else in the current command line (via C<%1>, C<%2>, etc.), then
+those will be deleted from the list provided by C<%E<lt>>. Consider the
+following command found in a F<Conscript> file in the F<test> directory:
+
+  Command $env 'tgt', qw(foo bar baz), qq(
+	echo %< -i %1 > %>
+	echo %< -i %2 >> %>
+	echo %< -i %3 >> %>
+  );
+
+If F<tgt> needed to be updated, then this would result in the execution of
+the following commands, assuming that no remapping has been established for
+the F<test> directory:
+
+  echo test/bar test/baz -i test/foo > test/tgt
+  echo test/foo test/baz -i test/bar >> test/tgt
+  echo test/foo test/bar -i test/baz >> test/tgt
+
+=back
+
+Any of the above pseudo-variables may be followed immediately by one of
+the following suffixes to select a portion of the expanded path name:
+
+  :a    the absolute path to the file name
+  :b    the directory plus the file name stripped of any suffix
+  :d    the directory
+  :f    the file name
+  :s    the file name suffix
+  :F    the file name stripped of any suffix
+
+Continuing with the above example, C<%E<lt>:f> would expand to C<foo bar baz>,
+and C<%E<gt>:d> would expand to C<test>.
+
+There are additional C<%> elements which affect the command line(s):
+
+=over 10
+
+=item %[ %]
+
+It is possible to programmatically rewrite part of the command by
+enclosing part of it between C<%[> and C<%]>.  This will call the
+construction variable named as the first word enclosed in the brackets
+as a Perl code reference; the results of this call will be used to
+replace the contents of the brackets in the command line.  For example,
+given an existing input file named F<tgt.in>:
+
+  @keywords = qw(foo bar baz);
+  $env = new cons(X_COMMA => sub { join(",", @_) });
+  Command $env 'tgt', 'tgt.in', qq(
+	echo '# Keywords: %[X_COMMA @keywords %]' > %>
+	cat %< >> %>
+  );
+
+This will execute:
+
+  echo '# Keywords: foo,bar,baz' > tgt
+  cat tgt.in >> tgt
+
+=item %( %)
+
+Cons includes the text of the command line in the MD5 signature for a
+build, so that targets get rebuilt if you change the command line (to
+add or remove an option, for example).  Command-line text in between
+C<%(> and C<%)>, however, will be ignored for MD5 signature calculation.
+
+Internally, Cons uses C<%(> and C<%)> around include and library
+directory options (C<-I> and C<-L> on UNIX systems, C</I> and
+C</LIBPATH> on Windows NT) to avoid rebuilds just because the directory
+list changes.  Rebuilds occur only if the changed directory list causes
+any included I<files> to change, and a changed include file is detected
+by the MD5 signature calculation on the actual file contents.
+
+=back
+
+=head2 Expanding construction variables in file names
+
+Cons expands construction variables in the source and target file names
+passed to the various construction methods according to the expansion
+rules described above:
 
   $env = new cons(
 	DESTDIR	=>	'programs',
@@ -4810,10 +5704,205 @@ target file names by prefixing the construction variable name with C<%>.
   );
   Program $env '%DESTDIR/hello', '%SRCDIR/hello.c';
 
-Expansion of construction variables is recursive--that is, the file
-name(s) will be re-expanded until no more substitutions can be made. If
-a construction variable is not defined in the environment, then the null
-string will be substituted.
+This allows for flexible configuration, through the construction
+environment, of directory names, suffixes, etc.
+
+
+=head1 Build actions
+
+Cons supports several types of B<build actions> that can be performed
+to construct one or more target files.  Usually, a build action is
+a construction command--that is, a command-line string that invokes
+an external command.  Cons can also execute Perl code embedded in a
+command-line string, and even supports an experimental ability to build
+a target file by executing a Perl code reference directly.
+
+A build action is usually specified as the value of a construction
+variable:
+
+  $env = new cons(
+	CCCOM         => '%CC %CFLAGS %_IFLAGS -c %< -o %>',
+	LINKCOM       => '[perl] &link_executable("%>", "%<")',
+	ARCOM         => sub { my($env, $target, @sources) = @_;
+				 # code to create an archive
+				}
+  );
+
+A build action may be associated directly with one or more target files
+via the C<Command> method; see below.
+
+=head2 Construction commands
+
+A construction command goes through expansion of construction variables
+and C<%-> pseudo-variables, as described above, to create the actual
+command line that Cons will execute to generate the target file or
+files.
+
+After substitution occurs, strings of white space are converted into
+single blanks, and leading and trailing white space is eliminated. It
+is therefore currently not possible to introduce variable length white
+space in strings passed into a command.
+
+If a multi-line command string is provided, the commands are executed
+sequentially. If any of the commands fails, then none of the rest are
+executed, and the target is not marked as updated, i.e. a new signature is
+not stored for the target.
+
+Normally, if all the commands succeed, and return a zero status (or whatever
+platform-specific indication of success is required), then a new signature
+is stored for the target. If a command erroneously reports success even
+after a failure, then Cons will assume that the target file created by that
+command is accurate and up-to-date.
+
+The first word of each command string, after expansion, is assumed to be an
+executable command looked up on the C<PATH> environment variable (which is,
+in turn, specified by the C<ENV> construction variable). If this command is
+found on the path, then the target will depend upon it: the command will
+therefore be automatically built, as necessary. It's possible to write
+multi-part commands to some shells, separated by semi-colons. Only the first
+command word will be depended upon, however, so if you write your command
+strings this way, you must either explicitly set up a dependency (with the
+C<Depends> method), or be sure that the command you are using is a system
+command which is expected to be available. If it isn't available, you will,
+of course, get an error.
+
+Cons normally prints a command before executing it.  This behavior is
+suppressed if the first character of the command is C<@>.  Note that
+you may need to separate the C<@> from the command name or escape it to
+prevent C<@cmd> from looking like an array to Perl quote operators that
+perform interpolation:
+
+  # The first command line is incorrect,
+  # because "@cp" looks like an array
+  # to the Perl qq// function.
+  # Use the second form instead.
+  Command $env 'foo', 'foo.in', qq(
+	@cp %< tempfile
+	@ cp tempfile %>
+  );
+
+If there are shell meta characters anywhere in the expanded command line,
+such as C<E<lt>>, C<E<gt>>, quotes, or semi-colon, then the command
+will actually be executed by invoking a shell. This means that a command
+such as:
+
+  cd foo
+
+alone will typically fail, since there is no command C<cd> on the path. But
+the command string:
+
+  cd $<:d; tar cf $>:f $<:f
+
+when expanded will still contain the shell meta character semi-colon, and a
+shell will be invoked to interpret the command. Since C<cd> is interpreted
+by this sub-shell, the command will execute as expected.
+
+=head2 Perl expressions
+
+If any command (even one within a multi-line command) begins with
+C<[perl]>, the remainder of that command line will be evaluated by the
+running Perl instead of being forked by the shell.  If an error occurs
+in parsing the Perl code, or if the Perl expression returns 0 or undef,
+the command will be considered to have failed.  For example, here is a
+simple command which creates a file C<foo> directly from Perl:
+
+  $env = new cons();
+  Command $env 'foo',
+    qq([perl] open(FOO,'>foo');print FOO "hi\\n"; close(FOO); 1);
+
+Note that when the command is executed, you are in the same package as
+when the F<Construct> or F<Conscript> file was read, so you can call
+Perl functions you've defined in the same F<Construct> or F<Conscript>
+file in which the C<Command> appears:
+
+  $env = new cons();
+  sub create_file {
+	my $file = shift;
+	open(FILE, ">$file");
+	print FILE "hi\n";
+	close(FILE);
+	return 1;
+  }
+  Command $env 'foo', "[perl] &create_file('%>')";
+
+The Perl string will be used to generate the signature for the derived
+file, so if you change the string, the file will be rebuilt.  The contents
+of any subroutines you call, however, are not part of the signature,
+so if you modify a called subroutine such as C<create_file> above,
+the target will I<not> be rebuilt.  Caveat user.
+
+=head2 Perl code references [EXPERIMENTAL]
+
+Cons supports the ability to create a derived file by directly executing
+a Perl code reference.  This feature is considered EXPERIMENTAL and
+subject to change in the future.
+
+A code reference may either be a named subroutine referenced by the
+usual C<\&> syntax:
+
+  sub build_output {
+	my($env, $target, @sources) = @_;
+	print "build_output building $target\n";
+	open(OUT, ">$target");
+	foreach $src (@sources) {
+	    if (! open(IN, "<$src")) {
+		print STDERR "cannot open '$src': $!\n";
+		return undef;
+	    }
+	    print OUT, <IN>;
+	}
+	close(OUT);
+	return 1;
+  }
+  Command $env 'output', \&build_output;
+
+or the code reference may be an anonymous subroutine:
+
+  Command $env 'output', sub {
+	my($env, $target, @sources) = @_;
+	print "building $target\n";
+	open(FILE, ">$target");
+	print FILE "hello\n";
+	close(FILE);
+	return 1;
+  };
+
+To build the target file, the referenced subroutine is passed, in order:
+the construction environment used to generate the target; the path
+name of the target itself; and the path names of all the source files
+necessary to build the target file.
+
+The code reference is expected to generate the target file, of course,
+but may manipulate the source and target files in any way it chooses.
+The code reference must return a false value (C<undef> or C<0>) if
+the build of the file failed.  Any true value indicates a successful
+build of the target.
+
+Building target files using code references is considered EXPERIMENTAL
+due to the following current limitations:
+
+=over 4
+
+Cons does I<not> print anything to indicate the code reference is being
+called to build the file.  The only way to give the user any indication
+is to have the code reference explicitly print some sort of "building"
+message, as in the above examples.
+
+Cons does not generate any signatures for code references, so if the
+code in the reference changes, the target will I<not> be rebuilt.
+
+Cons has no public method to allow a code reference to extract
+construction variables.  This would be good to allow generalization of
+code references based on the current construction environment, but would
+also complicate the problem of generating meaningful signatures for code
+references.
+
+=back
+
+Support for building targets via code references has been released in
+this version to encourage experimentation and the seeking of possible
+solutions to the above limitations.
+
 
 =head1 Default construction methods
 
@@ -4927,190 +6016,35 @@ This is especially useful for allowing incremental updates to libraries
 or debug information files which are updated rather than rebuilt anew each
 time.  Cons will still delete the files when the C<-r> flag is specified.
 
+=head2 The C<AfterBuild> method
+
+The C<AfterBuild> method evaluates the specified perl string after
+building the given file or files (or finding that they are up to date).
+The eval will happen once per specified file.  C<AfterBuild> is called
+as follows:
+
+  AfterBuild $env 'foo.o', qq(print "foo.o is up to date!\n");
+
+The perl string is evaluated in the C<script> package, and has access
+to all variables and subroutines defined in the F<Conscript> file in
+which the C<AfterBuild> method is called.
+
 =head2 The C<Command> method
 
 The C<Command> method is a catchall method which can be used to arrange for
-any external command to be called to update the target. For this command, a
-target file and list of inputs is provided. In addition a construction
-command line, or lines, is provided as a string (this string may have
-multiple commands embedded within it, separated by new lines). C<Command> is
-called as follows:
+any build action to be executed to update the target. For this command, a
+target file and list of inputs is provided. In addition, a build action
+is specified as the last argument.  The build action is typically a
+command line or lines, but may also contain Perl code to be executed;
+see the section above on build actions for details.
 
-  Command $env <target>, <inputs>, <construction command>;
+The C<Command> method is called as follows:
+
+  Command $env <target>, <inputs>, <build action>;
 
 The target is made dependent upon the list of input files specified, and the
 inputs must be built successfully or Cons will not attempt to build the
 target.
-
-Within the construction command, any variable from the construction
-environment may be introduced by prefixing the name of the construction
-variable with C<%>. This is recursive: the command is expanded until no more
-substitutions can be made. If a construction variable is not defined in the
-environment, then the null string will be substituted.  A doubled C<%%>
-will be replaced by a single C<%> in the construction command.
-
-There are several pseudo variables which will also be expanded:
-
-=over 10
-
-=item %>
-
-The target file name (in a multi-target command, this is always the first
-target mentioned).
-
-=item %0
-
-Same as C<%E<gt>>.
-
-=item %1, %2, ..., %9
-
-These refer to the first through ninth input file, respectively.
-
-=item %E<lt>
-
-The full set of inputs. If any of these have been used anywhere else in the
-current command line (via C<%1>, C<%2>, etc.), then those will be deleted
-from the list provided by C<%E<lt>>. Consider the following command found in a
-F<Conscript> file in the F<test> directory:
-
-  Command $env 'tgt', qw(foo bar baz), qq(
-	echo %< -i %1 > %>
-	echo %< -i %2 >> %>
-	echo %< -i %3 >> %>
-  );
-
-If F<tgt> needed to be updated, then this would result in the execution of
-the following commands, assuming that no remapping has been established for
-the F<test> directory:
-
-  echo test/bar test/baz -i test/foo > test/tgt
-  echo test/foo test/baz -i test/bar >> test/tgt
-  echo test/foo test/bar -i test/baz >> test/tgt
-
-=back
-
-Any of the above pseudo variables may be followed immediately by one of
-the following suffixes to select a portion of the expanded path name:
-
-  :a    the absolute path to the file name
-  :b    the directory plus the file name stripped of any suffix
-  :d    the directory
-  :f    the file name
-  :s    the file name suffix
-  :F    the file name stripped of any suffix
-
-Continuing with the above example, C<%<:f> would expand to C<foo bar baz>,
-and C<%>:d> would expand to C<test>.
-
-It is possible to programmatically rewrite part of the command by
-enclosing part of it between C<%[> and C<%]>.  This will call the
-construction variable named as the first word enclosed in the brackets
-as a Perl code reference; the results of this call will be used to
-replace the contents of the brackets in the command line.  For example,
-given an existing input file named F<tgt.in>:
-
-  @keywords = qw(foo bar baz);
-  $env = new cons(X_COMMA => sub { join(",", @_) });
-  Command $env 'tgt', 'tgt.in', qq(
-	echo '# Keywords: %[X_COMMA @keywords %]' > %>
-	cat %< >> %>
-  );
-
-This will execute:
-
-  echo '# Keywords: foo,bar,baz' > tgt
-  cat tgt.in >> tgt
-
-After substitution occurs, strings of white space are converted into single
-blanks, and leading and trailing white space is eliminated. It is therefore
-not possible to introduce variable length white space in strings passed into
-a command, without resorting to some sort of shell quoting.
-
-If a multi-line command string is provided, the commands are executed
-sequentially. If any of the commands fails, then none of the rest are
-executed, and the target is not marked as updated, i.e. a new signature is
-not stored for the target.
-
-Normally, if all the commands succeed, and return a zero status (or whatever
-platform-specific indication of success is required), then a new signature
-is stored for the target. If a command erroneously reports success even
-after a failure, then Cons will assume that the target file created by that
-command is accurate and up-to-date.
-
-The first word of each command string, after expansion, is assumed to be an
-executable command looked up on the C<PATH> environment variable (which is,
-in turn, specified by the C<ENV> construction variable). If this command is
-found on the path, then the target will depend upon it: the command will
-therefore be automatically built, as necessary. It's possible to write
-multi-part commands to some shells, separated by semi-colons. Only the first
-command word will be depended upon, however, so if you write your command
-strings this way, you must either explicitly set up a dependency (with the
-C<Depends> method), or be sure that the command you are using is a system
-command which is expected to be available. If it isn't available, you will,
-of course, get an error.
-
-If any command (even one within a multi-line command) begins with
-C<[perl]>, the remainder of that command line will be evaluated by the
-running Perl instead of being forked by the shell.  If an error occurs
-in parsing the Perl or if the Perl expression returns 0 or undef, the
-command will be considered to have failed.  For example, here is a simple
-command which creates a file C<foo> directly from Perl:
-
-  $env = new cons();
-  Command $env 'foo',
-    qq([perl] open(FOO,'>foo');print FOO "hi\\n"; close(FOO); 1);
-
-Note that when the command is executed, you are in the same package as
-when the F<Construct> or F<Conscript> file was read, so you can call
-Perl functions you've defined in the same F<Construct> or F<Conscript>
-file in which the C<Command> appears:
-
-  $env = new cons();
-  sub create_file {
-	my $file = shift;
-	open(FILE, ">$file");
-	print FILE "hi\n";
-	close(FILE);
-	return 1;
-  }
-  Command $env 'foo', "[perl] &create_file('%>')";
-
-The Perl string will be used to generate the signature for the derived
-file, so if you change the string, the file will be rebuilt.  The contents
-of any subroutines you call, however, are not part of the signature,
-so if you modify a called subroutine such as C<create_file> above,
-the target will I<not> be rebuilt.  Caveat user.
-
-Cons normally prints a command before executing it.  This behavior is
-suppressed if the first character of the command is C<@>.  Note that
-you may need to separate the C<@> from the command name or escape it to
-prevent C<@cmd> from looking like an array to Perl quote operators that
-perform interpolation:
-
-  # The first command line is incorrect,
-  # because "@cp" looks like an array
-  # to the Perl qq// function.
-  # Use the second form instead.
-  Command $env 'foo', 'foo.in', qq(
-	@cp %< tempfile
-	@ cp tempfile %>
-  );
-
-If there are shell meta characters anywhere in the expanded command line,
-such as C<E<lt>>, C<E<gt>>, quotes, or semi-colon, then the command
-will actually be executed by invoking a shell. This means that a command
-such as:
-
-  cd foo
-
-alone will typically fail, since there is no command C<cd> on the path. But
-the command string:
-
-  cd $<:d; tar cf $>:f $<:f
-
-when expanded will still contain the shell meta character semi-colon, and a
-shell will be invoked to interpret the command. Since C<cd> is interpreted
-by this sub-shell, the command will execute as expected.
 
 To specify a command with multiple targets, you can specify a reference to a
 list of targets. In Perl, a list reference can be created by enclosing a
@@ -5134,21 +6068,21 @@ the specified source files. It is invoked as shown below:
 Under Unix, source files ending in F<.s> and F<.c> are currently
 supported, and will be compiled into a name of the same file ending
 in F<.o>. By default, all files are created by invoking the external
-command which results from expanding the C<CCCOM> construction
-variable, with C<%E<lt>> and C<%E<gt>> set to the source and object
-files, respectively (see the C<Command> method for expansion details).
-The variable C<CPPPATH> is also used when scanning source files for
-dependencies. This is a colon separated list of pathnames, and is also
-used to create the construction variable C<_IFLAGS,> which will contain
-the appropriate list of -C<I> options for the compilation. Any relative
-pathnames in C<CPPPATH> is interpreted relative to the directory in
-which the associated construction environment was created (absolute
-and top-relative names may also be used). This variable is used by
-C<CCCOM>. The behavior of this command can be modified by changing any
-of the variables which are interpolated into C<CCCOM>, such as C<CC>,
-C<CFLAGS>, and, indirectly, C<CPPPATH>. It's also possible to replace
-the value of C<CCCOM>, itself. As a convenience, this file returns the
-list of object filenames.
+command which results from expanding the C<CCCOM> construction variable,
+with C<%E<lt>> and C<%E<gt>> set to the source and object files,
+respectively. (See the section above on construction variable expansion
+for details).  The variable C<CPPPATH> is also used when scanning source
+files for dependencies. This is a colon separated list of pathnames, and
+is also used to create the construction variable C<_IFLAGS,> which will
+contain the appropriate list of -C<I> options for the compilation. Any
+relative pathnames in C<CPPPATH> is interpreted relative to the
+directory in which the associated construction environment was created
+(absolute and top-relative names may also be used). This variable is
+used by C<CCCOM>. The behavior of this command can be modified by
+changing any of the variables which are interpolated into C<CCCOM>, such
+as C<CC>, C<CFLAGS>, and, indirectly, C<CPPPATH>. It's also possible
+to replace the value of C<CCCOM>, itself. As a convenience, this file
+returns the list of object filenames.
 
 
 =head2 The C<Program> method
@@ -5170,18 +6104,18 @@ above, apply to this method also.
 The actual linking of the program will be handled by an external command
 which results from expanding the C<LINKCOM> construction variable, with
 C<%E<lt>> set to the object files to be linked (in the order presented),
-and C<%E<gt>> set to the target (see the C<Command> method for expansion
-details). The user may set additional variables in the construction
-environment, including C<LINK>, to define which program to use for
-linking, C<LIBPATH>, a colon-separated list of library search paths,
-for use with library specifications of the form I<-llib>, and C<LIBS>,
-specifying the list of libraries to link against (in either I<-llib>
-form or just as pathnames. Relative pathnames in both C<LIBPATH> and
-C<LIBS> are interpreted relative to the directory in which the associated
-construction environment is created (absolute and top-relative names may
-also be used). Cons automatically sets up dependencies on any libraries
-mentioned in C<LIBS>: those libraries will be built before the command
-is linked.
+and C<%E<gt>> set to the target. (See the section above on construction
+variable expansion for details.)  The user may set additional variables
+in the construction environment, including C<LINK>, to define which
+program to use for linking, C<LIBPATH>, a colon-separated list of
+library search paths, for use with library specifications of the form
+I<-llib>, and C<LIBS>, specifying the list of libraries to link against
+(in either I<-llib> form or just as pathnames. Relative pathnames in
+both C<LIBPATH> and C<LIBS> are interpreted relative to the directory
+in which the associated construction environment is created (absolute
+and top-relative names may also be used). Cons automatically sets up
+dependencies on any libraries mentioned in C<LIBS>: those libraries will
+be built before the command is linked.
 
 
 =head2 The C<Library> method
@@ -5203,14 +6137,15 @@ above, apply to this method also.
 The actual creation of the library will be handled by an external
 command which results from expanding the C<ARCOM> construction variable,
 with C<%E<lt>> set to the library members (in the order presented),
-and C<%E<gt>> to the library to be created (see the C<Command> method
-for expansion details). The user may set variables in the construction
-environment which will affect the operation of the command. These
-include C<AR>, the archive program to use, C<ARFLAGS>, which can be
-used to modify the flags given to the program specified by C<AR>, and
-C<RANLIB>, the name of a archive index generation program, if needed
-(if the particular need does not require the latter functionality,
-then C<ARCOM> must be redefined to not reference C<RANLIB>).
+and C<%E<gt>> to the library to be created.  (See the section above
+on construction variable expansion for details.)  The user may set
+variables in the construction environment which will affect the
+operation of the command. These include C<AR>, the archive program
+to use, C<ARFLAGS>, which can be used to modify the flags given to
+the program specified by C<AR>, and C<RANLIB>, the name of a archive
+index generation program, if needed (if the particular need does not
+require the latter functionality, then C<ARCOM> must be redefined to not
+reference C<RANLIB>).
 
 The C<Library> method allows the same library to be specified in multiple
 method invocations. All of the contributing objects from all the invocations
@@ -5254,6 +6189,67 @@ command:
 
 specifies that both the F<foo> and F<bar> files depend on the listed
 input files.
+
+
+=head2 The C<RuleSet> method
+
+The C<RuleSet> method returns the construction variables for building
+various components with one of the rule sets supported by Cons.  The
+currently supported rule sets are:
+
+=over 4
+
+=item msvc
+
+Rules for the Microsoft Visual C++ compiler suite.
+
+=item unix
+
+Generic rules for most UNIX-like compiler suites.
+
+=back
+
+On systems with more than one available compiler suite, this allows you
+to easily create side-by-side environments for building software with
+multiple tools:
+
+    $msvcenv = new cons(RuleSet("msvc"));
+    $cygnusenv = new cons(RuleSet("unix"));
+
+In the future, this could also be extended to other platforms that
+have different default rule sets.
+
+
+=head2 The C<DefaultRules> method
+
+The C<DefaultRules> method sets the default construction variables that
+will be returned by the C<new> method to the specified arguments:
+
+  DefaultRules(CC     => 'gcc',
+	       CFLAGS => '',
+	       CCCOM  => '%CC %CFLAGS %_IFLAGS -c %< -o %>');
+  $env = new cons();
+  # $env now contains *only* the CC, CFLAGS,
+  # and CCCOM construction variables
+
+Combined with the C<RuleSet> method, this also provides an easy way
+to set explicitly the default build environment to use some supported
+toolset other than the Cons defaults:
+
+    # use a UNIX-like tool suite (like cygwin) on Win32
+    DefaultRules(RuleSet('unix'));
+    $env = new cons();
+
+Note that the C<DefaultRules> method completely replaces the default
+construction environment with the specified arguments, it does not
+simply override the existing defaults.  To override one or more
+variables in a supported C<RuleSet>, append the variables and values:
+
+  DefaultRules(RuleSet('unix'), CFLAGS => '-O3');
+  $env1 = new cons();
+  $env2 = new cons();
+  # both $env1 and $env2 have 'unix' defaults
+  # with CFLAGS set to '-O3'
 
 
 =head2 The C<Ignore> method
@@ -5427,11 +6423,11 @@ new package which inherits existing methods from the C<cons> package and
 overrides or adds others. This can be done using Perl's inheritance
 mechanisms.
 
-The following example defines a new package C<cons::switch> which overrides the
-standard C<Library> method. The overridden method builds linked library
-modules, rather than library archives. A new constructor is
-provided. Environments created with this constructor will have the new
-library method; others won't.
+The following example defines a new package C<cons::switch> which
+overrides the standard C<Library> method. The overridden method builds
+linked library modules, rather than library archives. A new
+constructor is provided. Environments created with this constructor
+will have the new library method; others won't.
 
   package cons::switch;
   BEGIN {@ISA = 'cons'}
@@ -5563,7 +6559,13 @@ Show products and where they are defined. No build is attempted.
 
 =item C<-q>
 
-Don't be verbose about Installing and Removing targets.
+Make the build quiet.  Multiple C<-q> options may be specified.
+
+A single C<-q> options suppress messages about Installing and Removing
+targets.
+
+Two C<-q> options suppress build command lines and target up-to-date
+messages.
 
 =item C<-r>
 
@@ -5575,11 +6577,32 @@ attempted.
 Search for files in I<repos>.  Multiple B<-R> I<repos> directories are
 searched in the order specified.
 
+=item C<-S> <pkg>
+
+Use the sig::<pkg> package to calculate.  Supported <pkg> values
+include "md5" for MD5 signature calculation and "md5::debug" for debug
+information about MD5 signature calculation.
+
+If the specified package ends in <::debug>, signature debug information
+will be printed to the file name specified in the C<CONS_SIG_DEBUG>
+environment variable, or to standard output if the environment variable
+is not set.
+
 =item C<-t>
 
-Traverse up the directory hierarchy looking for a F<Construct> file, if
-none exists in the current directory.  Targets will be modified to be
-relative to the F<Construct> file.
+Traverse up the directory hierarchy looking for a F<Construct> file,
+if none exists in the current directory.  Targets will be modified to
+be relative to the F<Construct> file.
+
+Internally, C<cons> will change its working directory to the directory
+which contains the top-level F<Construct> file and report:
+
+  cons: Entering directory `top-level-directory'
+
+This message indicates to an invoking editor (such as emacs) or build
+environment that Cons will now report all file names relative to the
+top-level directory.  This message can not be suppressed with the C<-q>
+option.
 
 =item C<-v>
 
@@ -5633,9 +6656,14 @@ installs F<export/include/foo.h>, for example, just type:
 
 =head1 Using and writing dependency scanners
 
-QuickScan allows simple target-independent scanners to be set up for source
-files. Only one QuickScan scanner may be associated with any given source
-file and environment.
+QuickScan allows simple target-independent scanners to be set up for
+source files. Only one QuickScan scanner may be associated with any given
+source file and environment, although the same scanner may (and should)
+be used for multiple files of a given type.
+
+A QuickScan scanner is only ever invoked once for a given source file,
+and it is only invoked if the file is used by some target in the tree
+(i.e., there is a dependency on the source file).
 
 QuickScan is invoked as follows:
 
@@ -5656,13 +6684,11 @@ filehandle SCAN. It may also terminate the loop, if it knows that no further
 include information is available, by closing the filehandle.
 
 Whether or not a lookup path is provided, QuickScan first tries to lookup
-the file relative to the current directory (for the top-level file supplied
-directly to QuickScan), or from the directory containing the file which
-referenced the file. This is not very general, but seems good
-enough--especially if you have the luxury of writing your own utilities and
-can control the use of the search path in a standard way. Finally, the
-search path is, currently, colon separated. This may not make the NT camp
-happy.
+the file relative to the current directory (for the top-level file
+supplied directly to QuickScan), or from the directory containing the
+file which referenced the file. This is not very general, but seems good
+enough--especially if you have the luxury of writing your own utilities
+and can control the use of the search path in a standard way.
 
 Here's a real example, taken from a F<Construct> file here:
 
@@ -5671,30 +6697,23 @@ Here's a real example, taken from a F<Construct> file here:
       foreach $t (@tables) {
 	  $env->QuickScan(sub { /\b\S*?\.smf\b/g }, "$t.smf",
 			  $env->{SMF_INCLUDE_PATH});
-	  $env->Command(
-	      ["$t.smdb.cc","$t.smdb.h","$t.snmp.cc","$t.ami.cc", "$t.http.cc"],
-	      "$t.smf",
-	      q(
-		smfgen %( %SMF_INCLUDE_OPT %) %<
-	      )
-	  );
+	  $env->Command(["$t.smdb.cc","$t.smdb.h","$t.snmp.cc",
+			 "$t.ami.cc", "$t.http.cc"], "$t.smf",
+			q(smfgen %( %SMF_INCLUDE_OPT %) %<));
       }
   }
+
+The subroutine above finds all names of the form <name>.smf in the
+file. It will return the names even if they're found within comments,
+but that's OK (the mechanism is forgiving of extra files; they're just
+ignored on the assumption that the missing file will be noticed when
+the program, in this example, smfgen, is actually invoked).
 
 [NOTE that the form C<$env-E<gt>QuickScan ...>  and C<$env-E<gt>Command
 ...> should not be necessary, but, for some reason, is required
 for this particular invocation. This appears to be a bug in Perl or
 a misunderstanding on my part; this invocation style does not always
 appear to be necessary.]
-
-This finds all names of the form <name>.smf in the file. It will return the
-names even if they're found within comments, but that's OK (the mechanism is
-forgiving of extra files; they're just ignored on the assumption that the
-missing file will be noticed when the program, in this example, smfgen, is
-actually invoked).
-
-A scanner is only invoked for a given source file if it is needed by some
-target in the tree. It is only ever invoked once for a given source file.
 
 Here is another way to build the same scanner. This one uses an
 explicit code reference, and also (unecessarily, in this case) reads
@@ -5712,7 +6731,22 @@ Note that the order of the loop is reversed, with the loop test at the
 end. This is because the first line is already read for you. This scanner
 can be attached to a source file by:
 
-    QuickScan $env \myscan, "$_.smf";
+  QuickScan $env \&myscan, "$_.smf";
+
+This final example, which scans a different type of input file, takes
+over the file scanning rather than being called for each input line:
+
+  $env->QuickScan(
+      sub { my(@includes) = ();
+	  do {
+	     push(@includes, $3)
+		 if /^(#include|import)\s+(\")(.+)(\")/ && $3
+	  } while <SCAN>;
+	  @includes
+      },
+      "$idlFileName",
+      "$env->{CPPPATH};$BUILD/ActiveContext/ACSCLientInterfaces"
+  );
 
 =head1 SUPPORT AND SUGGESTIONS
 
@@ -5747,4 +6781,5 @@ a part of the program itself.
 =cut
 
 
-#:endofperl
+__END__
+:endofperl

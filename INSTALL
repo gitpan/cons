@@ -1,9 +1,10 @@
-$Id: INSTALL,v 1.9 2000/06/06 20:58:42 rv Exp $
+$Id: INSTALL,v 1.10 2001/05/25 14:39:03 knight Exp $
 
 This cons distribution contains the following files:
 
 CHANGES		- Change log for cons.
 COPYING		- The GNU General Public License under which cons is released.
+COPYRIGHT	- Specific copyright dates and statement for Cons.
 INSTALL		- This file.
 README		- Explanation of software.
 RELEASE		- Release Notes for current distribution.
@@ -15,9 +16,9 @@ cons.html	- HTML formatted cons documentation.
 test.*.log	- Log file(s) from regression tests of cons with various
 		  versions of Perl.
 
-This distribution may optionally contain a test/ subdirectory containing
-the regression test suite for cons.  See test/README for details about
-its contents.
+A separate cons-test distribution contains a test/ subdirectory
+containing the regression test suite for cons.  If that distribution has
+been loaded here, see test/README for details about its contents.
 
 To use cons, simply copy the `cons' program to a location where you keep
 other executable binaries or scripts, like /usr/local/bin.

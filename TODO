@@ -1,8 +1,4 @@
-# $Id: TODO,v 1.45 2000/10/02 22:17:18 knight Exp $
-
-Fix signature documentation
-	Johan Holmberg 27 January 2000
-	(lots of other mail with Subject:  "Signature confusion")
+# $Id: TODO,v 1.54 2001/05/25 14:20:30 knight Exp $
 
 file names with spaces in them
 
@@ -19,6 +15,21 @@ additional methods:
 	cons::Java and cons::Jar methods?
 		Damien Neil 19 April 2000
 
+	cons::IDLGen methods?
+		Stefano Santoro 16 August 2000
+		Tony Kolarik 17 August 2000
+
+	ObjectInDir method?
+		Johan Holmberg, 5 October 2000
+		(Subject:  building an obj file multiple places)
+
+	cons::InstallRecursive method?
+		Doug Treder 11 October 2000
+		(Subject:  Installing 3rd party files w/o knowing all dependencies )
+
+	cons::ResourceFile method?
+		Gary Oberbrunner, 14 December 2000
+
 Be able to show why a target was built ("out of date w.r.t. to file X")
 	Gary Oberbrunner <garyo@genarts.com> 18 April 1998
 
@@ -34,32 +45,17 @@ Target aliases
 
 Case-insensitive file names (for Windows NT, others?)
 
-Content-based file:  build every time, then compute MD5 checksum on result
-	Brad Garcia 16 December 1999
-	Wayne Scott 25 January 2000
-
 AddTarget method to add targets dynamically to the list
 	Gary Oberbrunner 4 May 2000
 	additional discussion:
 	Dean Roehrich 12 May 2000
 	Gary Oberbrunner 12 May 2000
 
-Suppress local -I/-L flags when the directory doesn't exist
-	Dean Roehrich 5 May 2000
-
 NoCache method
 	Gary Oberbrunner 5 May 2000
 
 Better Carp error messages
 	Gary Oberbrunner 8 May 2000
-
-Give all .consign entries both a time stampe and a signature
-	Theo Petersen 10 May 2000
-
-AfterBuild method (used to dynamically add targets)
-	Gary Oberbrunner 11 May 2000
-	additional discussion:
-	Gary Oberbrunner 12 May 2000
 
 Add Erich Waelde's example to the web page.
 	Erich Walde 30 May 2000
@@ -74,23 +70,72 @@ Don't "die" immediately on errors (e.g. building a file two different
 ways); finish parsing the file to catch as many errors as possible and
 then die before buliding anything.
 
-Calling the Objects method with a null list:
-	$sources = qw( );
-	$env->Objects($sources);
-generates errors:
-	cons.pl: error in file "libs\random\conscript" (don't know how to construct
-	libs\random\.obj from libs\random\.)
-	cons.pl: script errors encountered: construction aborted
-Check other methods for the same problem.
-Bug reported by Allan Stokes.
+Mechanism for post-processing compiler/command output
+(massage C++ errors into readability).
+	Allan Stokes, 26 June 2000 [non-mailing list]
+
+Invoke g++ as the default UNIX LINKCOM if C++ objects are being linked.
+	Allan Stokes, 26 June 2000 [non-mailing list]
+
+Clarify MD5 installation instructions, esp. for Windows NT (ActiveState).
+	Allan Stokes, 26 June 2000 [non-mailing list]
+
+Add an error message if a build directory is Linked in two Conscript files.
+	Allan Stokes, 29 June 2000 [non-mailing list]
+
+A cleaner implementation of Link functionality on Windows NT,
+where hard links don't exist, possibly object-only variant
+build directories.
+	Tony Kolarik 29 September 2000
+	Johan Holmberg et al. 2 October 2000
+	(thread with subject:  Separate obj tree)
 
 Redirect STDOUT and/or STDERR to log file on NT.
 	Zachary Deretsky 2 October 2000
+
+Variant of Objects/Program that sets object name independently from
+source name
+	Tony Kolarik, 3 October 2000
+	Gary Oberbrunner, 5 October 2000
+	(Subject:  building an obj file multiple places)
+
+Guard against chdir(undef) or chdir('') when using -t, which silently
+chdir to $HOME
+	Tony Kolarik, 12 October 2000 [non-mailing list]
+
+Build pruning handles nested Conscript files inelegantly.
+	Mark Gressett, 13 October 2000
+	Tony Kolarik, 14 October 2000
+
+Unconditional "build this target" flag
+	Tony Kolarik 21 October 200 (Subject:  Speed vs. dependencies)
+
+Linker command lines too long on Windows NT
+	Tony Kolarik, 16 October 2000
+	Tony Kolarik, 8 November 2000 [non-mailing list]
+
+Win32 multiple creation times ("partially broken hard links") can
+short-circuit signature checks of Linked files after certain edit
+sequences
+	Tony Kolarik, 20 October 2000 (Subject:  win32 weirdness)
+	Tony Kolarik, 23 October 2000 (Subject:  NT hard links)
+
+.consign files on Win32 not getting written unless a target directory
+has built completely
+	Tony Kolarik, 30 October 2000 (Subject:  .consign files)
+
+Check if derived files in a Repository are up-to-date
+	David Sanderson 28 November 200
+
+Consistent cons_{error,warning} prefixes on messages
+	Tony Kolarik, 30 November 2000
+
+Allow Linked source directories to be specified in CPPPATH
+without putting .consign files there?
+	Rajesh Vaidheeswarran, 11 February 2001 [non-mailing list]
 
 
 
 Integrate the FreeBSD ports packaging into the normal build.
 
 Redesign web site.
-
-Archive mailing list (use hypermail).

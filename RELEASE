@@ -1,31 +1,48 @@
-$Id: RELEASE,v 1.21.2.1 2000/11/17 05:39:08 knight Exp $
+$Id: RELEASE,v 1.27 2001/05/25 16:49:54 knight Exp $
 
-Cons 2.2.0
+Cons 2.3.0
 **********
 
-This release is a stable release of Cons.  It contains all the changes
-from the 2.1 development branch, including many changes developed on
-that branch after the release of 2.1.2.
+Important visible changes include:
 
-Visible changes include:
+- Configurable support for signatures based on file contents has
+  been added via a SourceSignature() method and a SIGNATURE
+  construction variable.  IMPORTANT:  This changes the format
+  of .consign files.  Existing .consign files from prior versions
+  of Cons (e.g., in a Repository) will not interoperate with this
+  version.
 
-    --	Cons will now use the Digest::MD5 module in preference to the
-    	older, deprecated MD5 module.  The MD5 module will be used if
-	Digest::MD5 is not installed.
+- Multiple single-character command-line flags can now be concatenated.
 
-    --	When using the -t option, Cons now prints a message about its
-    	internal directory-change to the top-level directory.  This
-	allows emacs to be aware of the directory to which path names
-	in build output are relative.
+- Multiple -q options can be used to make the build quieter.
 
-    --	The QuickScan method on Windows NT now uses ';' instead of
-	':' as the PATH separator.  An array ref may also be used.
+- The calling semantics of the semi-internal _Objects method have
+  been changed to take a set of path names, not file references,
+  and return the looked-up file references.  This will affect
+  any user-defined methods that call the _Objects method.
 
-    --	The Depends and SourcePath methods can now cope with an
-    	array of targets.
+- A -S option has been used to allow a signature package to be
+  specified.  -S md5::debug enables debug messages for Cons
+  MD5 dependency calculations.
 
-This release contains many other fixes and less-visible changes.  See the
-CHANGES file for details.
+- A new AfterBuild method can be used to execute Perl code after a
+  target has been evaluated.
+
+- The sig::md5::srcsig() method has had its calling sequence changed.
+  A $self argument was added to make the method object-oriented,
+  allowing for better subclassing of the sig::md5 package.
+
+- A new RuleSet() method fetches a standard set of construction
+  variables for a Microsoft Visual C environment or a traditional UNIX
+  environment.
+
+- A new DefaultRules() method sets the default construction variables
+  returned by the cons::new() method.
+
+- Added experimental support for building targets using Perl code
+  references.
+
+See the CHANGES file for details and a complete list.
 
 General
 *******
