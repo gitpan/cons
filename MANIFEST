@@ -1,0 +1,7 @@
+Cons 1.0 packing list
+
+COPYRIGHT		copyright information
+README			read me first
+MANIFEST		this file
+cons.ps			PostScript documentation
+cons			the program
