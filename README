@@ -1,28 +1,24 @@
-$Id: README,v 1.8 2000/06/16 20:42:52 knight Exp $
+$Id: README,v 1.6.2.1 2000/09/14 18:27:48 knight Exp $
 
 Cons is a Perl-based make replacement.  It is not compatible with make,
 but has a number of powerful capabilities not found in other software
 construction systems, including make.
 
-This README accompanies a development release of Cons, intended for
-advanced features and quick delivery of bug fixes.  If you are looking
-for the latest stable release, look for an even-digit minor version number
-(2.0.x, 2.2.x, etc.).
+This package contains a stable release of Cons and its documentation.
+Cons is also available in development releases, intended for advanced
+features and quick delivery of bug fixes.  Development releases of Cons
+have odd-digit minor version numbers (2.1.x, 2.3.x, etc.).
 
-Cons is distributed in two different packages, one with a full regression
-test suite (cons-plus-test-$version.tgz) and the other without
-(cons-$version.tgz).  There is no difference between the copies of
-cons in the two packages.  Most users should only need the base package
-without the test suite.  The package with the test suite is recommended
-for people who are planning to add new features to cons and want to make
-sure they don't break existing functionality, or who want to verify that
-cons works correctly on their platform.
+A related package (cons-test) contains a portable test suite for Cons,
+plus a wrapper script and supporting modules for executing the tests.
+You do not need this other package to use Cons.
 
 You will need Perl 5.002 or better and the Perl MD5 Extension
 (MD5-1.6.tar.gz or greater), available from CPAN.
 
-This program is known to work on a variety of platforms: it's in production
-use on versions of FreeBSD, Linux, SunOS, Solaris, HPUX, AIX, IRIX and NT.
+Cons is known to work on a variety of platforms: it's in production
+use on versions of FreeBSD, Linux, SunOS, Solaris, HPUX, AIX, IRIX and
+Windows NT.
 
 Documentation is supplied in POD format (thanks to Ulrich Pfeifer).
 

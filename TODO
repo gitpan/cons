@@ -1,4 +1,4 @@
-# $Id: TODO,v 1.33 2000/07/12 12:16:52 knight Exp $
+# $Id: TODO,v 1.27 2000/05/12 11:35:26 knight Exp $
 
 Fix signature documentation
 	Johan Holmberg 27 January 2000
@@ -52,48 +52,6 @@ Content-based file:  build every time, then compute MD5 checksum on result
 	Wayne Scott 25 January 2000
 
 Use Digest::MD5 instead of MD5.
-
-AddTarget method to add targets dynamically to the list
-	Gary Oberbrunner 4 May 2000
-	additional discussion:
-	Dean Roehrich 12 May 2000
-	Gary Oberbrunner 12 May 2000
-
-Suppress local -I/-L flags when the directory doesn't exist
-	Dean Roehrich 5 May 2000
-
-NoCache method
-	Gary Oberbrunner 5 May 2000
-
-Better Carp error messages
-	Gary Oberbrunner 8 May 2000
-
-Give all .consign entries both a time stampe and a signature
-	Theo Petersen 10 May 2000
-
-Execute perl instead of shell to build a file
-	Gary Oberbrunner 11 May 2000
-
-AfterBuild method (used to dynamically add targets)
-	Gary Oberbrunner 11 May 2000
-	additional discussion:
-	Gary Oberbrunner 12 May 2000
-
-Make consistent expanding % variables in method arguments
-	Johan Holmberg 22 May 2000
-
-Add Erich Waelde's example to the web page.
-	Erich Walde 30 May 2000
-
-NT extensions
-	Greg Spencer 5 Jun 2000
-
-Collect all output prints to a common routine and provide an interface
-for customizing output.
-
-Don't "die" immediately on errors (e.g. building a file two different
-ways); finish parsing the file to catch as many errors as possible and
-then die before buliding anything.
 
 
 

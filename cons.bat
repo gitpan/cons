@@ -34,12 +34,12 @@ goto endofperl
 
 #!/usr/bin/env perl
 
-# $Id: cons.pl,v 1.82 2000/07/12 12:16:52 knight Exp $
+# $Id: cons.pl,v 1.69 2000/06/14 22:33:01 rv Exp $
 
-$ver_num = 2.1;
-$ver_rev = ".1";
+$ver_num = 2.0;
+$ver_rev = ".2";
 $version = sprintf "This is Cons %2.1f%s " .
-	    '($Id: cons.pl,v 1.82 2000/07/12 12:16:52 knight Exp $)'. "\n",
+	    '($Id: cons.pl,v 1.69 2000/06/14 22:33:01 rv Exp $)'. "\n",
 	    $ver_num, $ver_rev;
 
 # Cons: A Software Construction Tool.
@@ -64,6 +64,7 @@ require 5.002;
 use integer;
 use Cwd;
 use File::Copy;
+use File::Spec;
 
 #------------------------------------------------------------------
 # Determine if running on win32 platform - either Windows NT or 95
@@ -241,7 +242,7 @@ if ($main::_WIN32) {
 	'CCCOM'          => '%CC %CFLAGS %_IFLAGS /c %< /Fo%>',
 	'CXX'            => '%CC',
 	'CXXFLAGS'       => '%CFLAGS',
-	'CXXCOM'         => '%CXX %CXXFLAGS %_IFLAGS /c %< /Fo%>',
+	'CXXCOM'         => '%CXX %CXXFLAGS %_IFLAGS -c %< /Fo%>',
 	'INCDIRPREFIX'   => '/I',
 	'LINK'           => 'link',
 	'LINKCOM'        => '%LINK %LDFLAGS /out:%> %< %_LDIRS %LIBS',
@@ -381,17 +382,14 @@ if ($vol || $dir) {
 my $target_top;
 if ($param::traverse) {
     my $cwd = cwd();
-    my $ttop = dir::lookupdir(undef, $cwd);
-    my $dir = $ttop;
+    $target_top = dir::lookupdir(undef, $cwd);
+    my $dir = $target_top;
     while (! -f $dir->prefix . $param::topfile) {
 	$dir = $dir->up;
 	die("$0: unable to find $param::topfile.\n") if ! $dir;
     }
-    if ($dir != $ttop) {
-	chdir($dir->path);
-	@targets = map($ttop->lookup($_)->path, @targets);
-	$target_top = $ttop;
-    }
+    chdir($dir->path);
+    @targets = map($target_top->lookup($_)->path, @targets);
 }
 
 # Set up $dir::top and $dir::cwd, now that we are in the right directory.
@@ -506,7 +504,7 @@ sub buildtarget {
 		# conventions make sense.
 		next if $entry =~ /^\./; # ignore hidden files
 		my($tgt) = $members->{$entry};
-		next if ref($tgt) ne "dir" && !exists($tgt->{builder});
+		next if ref($tgt) eq "file" && !exists($tgt->{builder});
 		my($stat) = buildtarget($members->{$entry});
 		my($pri) = $priority{$stat};
 		if ($pri > $priority) {
@@ -585,8 +583,7 @@ sub main::doscripts {
 	    }
 	    undef @priv::scripts;
 	} else {
-	    my($_foo, $script, $line, $sub) = @{$priv::self->{script}->creator};
-	    warn qq(Ignoring missing script "$path" ($sub in $script, line $line).\n);
+	    warn qq(Ignoring missing script "$path".\n);
 	}
 
 # reset "a-zA-Z";# Reset here, to give Construct chance at globals (i.e. %ARG).
@@ -1235,7 +1232,7 @@ sub getcoms {
 
 	# Deal with %[ %].
 	$com =~ s{%\[(.*?)%\]}{
-	    my($func, @args) = grep { $_ ne '' } split(/\s+/, $1);
+	    my($func, @args) = split(/\s/, $1);
 	    die("$0: \"$func\" is not defined.\n")
 		unless ($self->{env}->{$func});
 	    &{$self->{env}->{$func}}(@args);
@@ -1951,10 +1948,6 @@ sub splitpath {
 sub updir {
     '..'
 }
-
-sub case_tolerant {
-    return $main::_WIN32;
-}
 
 # Directory and file handling. Files/dirs are represented by objects.
 # Other packages are welcome to add component-specific attributes.
@@ -2040,7 +2033,6 @@ sub _parse_path {
 	# An absolute path name.  If no volume was supplied,
 	# use the volume of our current directory.
 	$vol = $cwd_vol if $vol eq '';
-	$vol = lc($vol) if File::Spec->case_tolerant;
 	if (! defined $root{$vol}) {
 	    # This is our first time looking up a path name
 	    # on this volume, so create a root node for it.
@@ -2085,8 +2077,6 @@ sub _create_dirs {
 	    $dir->{member}->{$e} = $d;
 	} elsif (ref $d eq 'entry') {
 	    bless $d, 'dir';
-	    $d->{member}->{$dir::CURDIR} = $d;
-	    $d->{member}->{$dir::UPDIR} = $dir;
 	} elsif (ref $d eq 'file') {
 	    # This clause is to supply backwards compatibility,
 	    # with a warning, for anyone that's used FilePath
@@ -2329,7 +2319,6 @@ sub init {
 
     ($cwd_vol, undef, undef) = File::Spec->splitpath($path);
     $cwd_vol = '' if ! defined $cwd_vol;
-    $cwd_vol = lc($cwd_vol) if File::Spec->case_tolerant;
 }
 
 package file;
@@ -2582,7 +2571,6 @@ sub _build {
 
     $self->{status} = '';
 
-    my $dep;
     for $dep (@$rdeps) {
 	if ((build $dep) eq 'errors') {
 	    # Propagate dependent errors to target.
@@ -2636,8 +2624,6 @@ sub _build {
     # Then check for currency.
     if (! 'sig'->current($self, $sig)) {
 	# We have to build/derive the file.
-	print((' ' x $level), "Rebuilding ", $self->path, ": out of date.\n")
-		if $param::depends;
 	# First check to see if the built file is cached.
 	if ($builder->cachin($self, $sig)) {
 	    'sig'->set($self, $sig);
@@ -2675,12 +2661,9 @@ sub bind {
 	# the same and the sources are the same.
 	if ("$self->{builder} @{$self->{sources}}" ne "$builder @sources") {
 	    $main::errors++;
-	    my($_foo1, $script1, $line1, $sub1) = @{$self->creator};
-	    my($_foo2, $script2, $line2, $sub2) = script::caller_info;
-	    my $err = "\t${\$self->path}\n" .
-		      "\tbuilt (at least) two different ways:\n" .
-		      "\t\t$script1, line $line1:  $sub1\n" .
-		      "\t\t$script2, line $line2:  $sub2\n";
+	    my $path = $self->path;
+	    my $err = "$0: attempt to build ${\$self->path} twice, " .
+		      "in different ways!\n";
 	    die $err;
 	}
 	return;
@@ -3010,7 +2993,6 @@ sub srcsig {
     my($path) = @_;
     $md5->reset();
     open(FILE, $path) || return '';
-    binmode(FILE);
     $md5->addfile(FILE);
     close(FILE);
     # Uncomment this to print the result of file signature calculation.
@@ -3030,14 +3012,14 @@ Cons - Cons: A Software Construction System
 =head1 DESCRIPTION
 
 The original document was automatically derived from the F<cons/cons.html>
-by B<html2pod>, thanks to Ulrich Pfeifer. Later revisions were created from
+by B<html2pod>, thanks to Ulrich Pfiefer. Later revisions were created from
 the original.
 
 =head1 Cons: A Software Construction System
 
 by Bob Sidebotham, et al. F<cons-discuss@gnu.org>
 
-A guide and reference for version 2.1.1
+A guide and reference for version 2.0.2
 
 Copyright (c) 1996-2000 Free Software Foundation, Inc.
 
@@ -4381,7 +4363,6 @@ are overridden in the default:
   CC		=> 'cl',
   CFLAGS	=> '/nologo',
   CCCOM		=> '%CC %CFLAGS %_IFLAGS /c %< /Fo%>',
-  CXXCOM        => '%CXX %CXXFLAGS %_IFLAGS /c %< /Fo%>',
   INCDIRPREFIX  => '/I',
   LINK		=> 'link',
   LINKCOM	=> '%LINK %LDFLAGS /out:%> %< %_LDIRS %LIBS',

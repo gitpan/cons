@@ -1,7 +1,14 @@
-$Id: RELEASE,v 1.15 2000/06/14 22:33:01 rv Exp $
+$Id: RELEASE,v 1.15.2.1 2000/09/14 18:27:48 knight Exp $
 
-Cons 2.0.1 ($Id: RELEASE,v 1.15 2000/06/14 22:33:01 rv Exp $)
+Cons 2.0.2 ($Id: RELEASE,v 1.15.2.1 2000/09/14 18:27:48 knight Exp $)
 *************************************************************
+
+This release adds RPM and Debian packages for easier installation on
+Linux systems.  There are no changes to the Cons script itself from the
+2.0.1 release.
+
+Cons 2.0.1
+**********
 
 This release fixes a couple of bugs found *just after* 2.0
 was released.
